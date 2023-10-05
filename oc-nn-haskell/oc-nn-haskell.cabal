@@ -1,0 +1,26 @@
+cabal-version:      3.8
+name:               oc-nn-haskell
+version:            0.1.0.0
+synopsis:           Haskell code for Optimal Control using Neural Networks
+description:        Haskell code for Optimal Control using Neural Networks
+author:             Jonathan Merritt
+maintainer:         j.s.merritt@gmail.com
+copyright:          Copyright (C) Jonathan Merritt 2023
+category:           Demo
+extra-source-files: CHANGELOG.md
+
+library
+  hs-source-dirs:   src
+  exposed-modules:  LinearFit
+  build-depends:
+    base ^>=4.17.2.0,
+    random ^>=1.2.1.1,
+    statistics ^>=0.16.2.1
+
+executable oc-nn-haskell
+    main-is:          Main.hs
+    hs-source-dirs:   app
+    default-language: Haskell2010
+    build-depends:
+      base ^>=4.17.2.0,
+      oc-nn-haskell
