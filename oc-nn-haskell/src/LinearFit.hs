@@ -20,15 +20,44 @@ data Pt = Pt
     pt_y :: Float
   }
 
--- | Parameters of a straight line.
+-- | Parameters of the equation for a straight line.
+--
+-- 'y = theta_1 * x + theta_0'.
 data Line = Line
   { -- | y-intercept of the line (ie. coefficient for input raised to zero).
-    line_0 :: Float,
+    theta_0 :: Float,
     -- | slope of the line (ie. coefficient for input raised to first power).
-    line_1 :: Float
+    theta_1 :: Float
   }
 
----- Generation of points for linear fitting ----------------------------------
+-- | Given parameters of a linear relationship, apply the equation for the
+--   line to an input.
+linear :: Line -> Float -> Float
+linear (Line c m) x = m * x + c
+
+---- Linear fitting with SGD --------------------------------------------------
+
+-- | Loss function for fitting a single point.
+--
+-- This returns the squared difference between the predicted y-value of the
+-- provided point and its actual y-value.
+loss ::
+  -- | Current parameters of the line.
+  Line ->
+  -- | Point from the ground-truth dataset we're trying to fit.
+  Pt ->
+  -- | Square of the error between actual y-value and predicted y-value.
+  Float
+loss line gt =
+  let Pt x_gt y_gt = gt
+      -- y_pred is the predicted y value given the current line
+      y_pred = linear line x_gt
+      -- err_y is the difference between the ground-truth y and predicted y
+      err_y = y_gt - y_pred
+   in -- the returned value is the difference squared
+      err_y * err_y
+
+---- Generation of example points for linear fitting --------------------------
 
 -- | A default (finite) set of points used for the linear fitting example.
 defaultLinFitPts :: [Pt]
@@ -67,11 +96,6 @@ linFitPts gen line x_range stdev =
       xs = uniforms gen_x x_range
       ys = zipWith (+) (map (linear line) xs) (normals gen_y (0.0, stdev))
    in zipWith Pt xs ys
-
--- | Given parameters of a linear relationship, apply the equation for the
---   line to an input.
-linear :: Line -> Float -> Float
-linear (Line c m) x = m * x + c
 
 -- | Generate an infinite list of uniformly-distributed PRNG values.
 uniforms ::
