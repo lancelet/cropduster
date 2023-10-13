@@ -3,8 +3,10 @@
 module LinearFit
   ( -- * Types
     Pt (Pt, pt_x, pt_y),
+    Line (Line, theta_0, theta_1),
 
     -- * Functions
+    fit,
     defaultLinFitPts,
   )
 where
@@ -28,6 +30,11 @@ data Line = Line
     theta_0 :: Float,
     -- | slope of the line (ie. coefficient for input raised to first power).
     theta_1 :: Float
+  } deriving (Show)
+
+data LineGrad = LineGrad
+  { dLossdTheta_0 :: Float,
+    dLossdTheta_1 :: Float
   }
 
 -- | Given parameters of a linear relationship, apply the equation for the
@@ -37,7 +44,39 @@ linear (Line c m) x = m * x + c
 
 ---- Linear fitting with SGD --------------------------------------------------
 
--- | Loss function for fitting a single point.
+-- | Perform an SGD learning update for each of the supplied points.
+fit ::
+  -- | Learning rate.
+  Float ->
+  -- | Initial parameters of the line.
+  Line ->
+  -- | Points on which to perform learning updates. One point at a time is
+  --   used to update the line parameters.
+  [Pt] ->
+  -- | List of linear parameters and losses produced during each step of
+  --   fitting.
+  [(Line, Float)]
+fit gamma line [] = []
+fit gamma line (pt : pts) =
+  let (line', loss) = step gamma line pt
+   in (line', loss) : fit gamma line' pts
+
+-- | A single learning step.
+--
+-- Use the error obtained from estimating the point's y-coordinate to update
+-- the parameters of the line using stochastic gradient descent.
+step ::
+  -- | Learning rate.
+  Float ->
+  -- | Current parameters of the line.
+  Line ->
+  -- | Point to use for this step (ground truth).
+  Pt ->
+  -- | Updated line parameters, and the (previous) loss for this point.
+  (Line, Float)
+step gamma line gt = (sgdUpdate line gamma (lossGrad line gt), loss line gt)
+
+-- | Loss function for fitting a single ground truth point.
 --
 -- This returns the squared difference between the predicted y-value of the
 -- provided point and its actual y-value.
@@ -56,6 +95,40 @@ loss line gt =
       err_y = y_gt - y_pred
    in -- the returned value is the difference squared
       err_y * err_y
+
+-- | Compute the gradient of 'loss' with respect to the line fit parameters at
+--   a single ground truth point.
+lossGrad ::
+  -- | Current parameters of the line.
+  Line ->
+  -- | Point from the ground-truth dataset we're trying to fit.
+  Pt ->
+  -- | Gradient of the loss wrt each line parameter.
+  LineGrad
+lossGrad line gt =
+  let Pt x_gt y_gt = gt
+      y_pred = linear line x_gt
+      dLossdTheta_0 = 2 * (y_pred - y_gt) * x_gt
+      dLossdTheta_1 = 2 * (y_pred - y_gt)
+   in LineGrad dLossdTheta_0 dLossdTheta_1
+
+-- | Perform a stochastic gradient descent update of the line parameters.
+--
+-- See: https://en.wikipedia.org/wiki/Gradient_descent
+-- For a description of the overall approach.
+sgdUpdate ::
+  -- | Current parameters of the line.
+  Line ->
+  -- | Learning rate.
+  Float ->
+  -- | Gradient of loss with respect to the line parameters.
+  LineGrad ->
+  -- | New parameters of the line.
+  Line
+sgdUpdate (Line c m) gamma (LineGrad dc dm) = Line c' m'
+  where
+    c' = c - gamma * dc
+    m' = m - gamma * dm
 
 ---- Generation of example points for linear fitting --------------------------
 
