@@ -1,68 +1,113 @@
-module LinearFit (
-    -- * Types   
+{-# LANGUAGE ScopedTypeVariables #-}
+
+module LinearFit
+  ( -- * Types
     Pt (Pt, pt_x, pt_y),
+
     -- * Functions
-    linfitPts
-) where
+    defaultLinFitPts,
+  )
+where
 
-import Statistics.Distribution (quantile, ContDistr)
-import Statistics.Distribution.Normal (normalDistr)
-import System.Random (randoms, mkStdGen, StdGen, split)
-
+import Control.Exception (assert)
+import Statistics.Distribution (ContDistr, quantile)
+import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
+import System.Random (Random, RandomGen, StdGen, mkStdGen, randoms, split)
 
 -- | 2D Point.
-data Pt = Pt {
-    pt_x :: Float,
+data Pt = Pt
+  { pt_x :: Float,
     pt_y :: Float
-}
+  }
 
+-- | Parameters of a straight line.
+data Line = Line
+  { -- | y-intercept of the line (ie. coefficient for input raised to zero).
+    line_0 :: Float,
+    -- | slope of the line (ie. coefficient for input raised to first power).
+    line_1 :: Float
+  }
 
--- | Points for the linear fit demo.
+---- Generation of points for linear fitting ----------------------------------
+
+-- | A default (finite) set of points used for the linear fitting example.
+defaultLinFitPts :: [Pt]
+defaultLinFitPts =
+  let seed = 42
+      gen = mkStdGen seed
+      line = Line 5.0 1.5
+      n_points = 30
+      x_range = (0.0, 10.0)
+      y_stdev = 2.5
+   in take n_points (linFitPts gen line x_range y_stdev)
+
+-- | Generate points with pseudo-random noise for a linear fit.
 --
--- This returns an infinite list of points, so use `take` to limit it to the
--- required number.
-linfitPts :: [Pt]
-linfitPts =
-    let
-        -- | Number of points to generate.
-        n_points :: Int
-        n_points = 30
-        
-        -- | Parameters of the line.
-        slope, intercept :: Float
-        slope = 1.5
-        intercept = 5.0
+-- x values are distributed uniformly. y values follow the provided linear
+-- relationship, with additional Normally-distributed noise.
+linFitPts ::
+  forall g.
+  (RandomGen g) =>
+  -- | Random generator.
+  g ->
+  -- | Underlying linear relationship for the generated points.
+  Line ->
+  -- | '(min, max)' range for the uniformly-distributed x values.
+  (Float, Float) ->
+  -- | Standard Deviation of the noise added to y values.
+  Float ->
+  -- | Infinite list of generated points.
+  [Pt]
+linFitPts gen line x_range stdev =
+  let -- Configure random number generators.
+      gen_x, gen_y :: g
+      (gen_x, gen_y) = split gen
 
-        -- | Standard deviation of the y-values.
-        y_stdev :: Double
-        y_stdev = 2.5
+      -- Generate values.
+      xs = uniforms gen_x x_range
+      ys = zipWith (+) (map (linear line) xs) (normals gen_y (0.0, stdev))
+   in zipWith Pt xs ys
 
-        -- | Range of x-values in the points.
-        x_min, x_max :: Float
-        x_min = 0.0
-        x_max = 10.0
+-- | Given parameters of a linear relationship, apply the equation for the
+--   line to an input.
+linear :: Line -> Float -> Float
+linear (Line c m) x = m * x + c
 
-        -- | Random generators.
-        gen_base, gen_x, gen_y :: StdGen
-        gen_base = mkStdGen 42
-        (gen_x, gen_y) = split gen_base
+-- | Generate an infinite list of uniformly-distributed PRNG values.
+uniforms ::
+  forall a g.
+  (Ord a, Num a, Random a, RandomGen g) =>
+  -- | Random generator.
+  g ->
+  -- | '(min, max)' of the uniform distribution.
+  (a, a) ->
+  -- | Infinite list of generated values.
+  [a]
+uniforms gen (range_min, range_max) = assert (range_min <= range_max) vals
+  where
+    vals :: [a]
+    vals = map xform (randoms gen)
 
-        -- | Function to transform x-values from [0,1] to x_range.
-        xform_x :: Float -> Float
-        xform_x x = x * (x_max - x_min) + x_min
+    xform :: a -> a
+    xform x = x * (range_max - range_min) + range_min
 
-        -- | x-values
-        xs :: [Float]
-        xs = map xform_x (randoms gen_x)
-        
-        -- | Noise for each y-value. 
-        quantile_f :: ContDistr d => d -> Float -> Float
-        quantile_f dist inp = realToFrac (quantile dist (realToFrac inp))
-        y_noise :: [Float]
-        y_noise = map (quantile_f (normalDistr 0.0 y_stdev)) (randoms gen_y)
+-- | Generate an infinite list of Normally-distributed PRNG values.
+--
+-- Under the hood, this generates a sequence of 'Double' values, but converts
+-- them to type 'a'.
+normals ::
+  forall a g.
+  (RealFrac a, Random a, RandomGen g) =>
+  -- | Random generator.
+  g ->
+  -- | '(mean, stdev)' of the Normal distribution.
+  (a, a) ->
+  -- | Infinite list of generated values.
+  [a]
+normals gen (mean, stdev) = map (quantile_rf normal_dist) (randoms gen)
+  where
+    normal_dist :: NormalDistribution
+    normal_dist = normalDistr (realToFrac mean) (realToFrac stdev)
 
-        -- | y-values
-        ys :: [Float]
-        ys = zipWith (+) (map (\x -> x * slope + intercept) xs) y_noise
-    
-    in zipWith Pt xs ys
+    quantile_rf :: (ContDistr d) => d -> a -> a
+    quantile_rf dist x = realToFrac (quantile dist (realToFrac x))
