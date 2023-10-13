@@ -97,6 +97,8 @@ linFitPts gen line x_range stdev =
       ys = zipWith (+) (map (linear line) xs) (normals gen_y (0.0, stdev))
    in zipWith Pt xs ys
 
+---- PRNG sequence generation -------------------------------------------------
+
 -- | Generate an infinite list of uniformly-distributed PRNG values.
 uniforms ::
   forall a g.
