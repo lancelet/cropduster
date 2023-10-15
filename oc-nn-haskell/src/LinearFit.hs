@@ -1,6 +1,7 @@
 {-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeOperators #-}
 
 module LinearFit
   ( -- * Types
@@ -18,6 +19,8 @@ where
 
 import Control.Exception (assert)
 import Control.Monad (forM_)
+import Data.Bifunctor (second)
+import Data.VectorSpace (AdditiveGroup, Scalar, VectorSpace, (*^), (^-^))
 import Graphics.Matplotlib ((%))
 import qualified Graphics.Matplotlib as Plt
 import Path (Abs, Dir, Path, (</>))
@@ -141,6 +144,53 @@ sgdUpdate (Line c m) gamma (LineGrad dc dm) = Line c' m'
   where
     c' = c - gamma * dc
     m' = m - gamma * dm
+
+---- Generic SGD --------------------------------------------------------------
+
+-- | Mark a type as being a gradient.
+newtype Grad p = Grad p
+
+-- | Perform a gradient descent update of a value.
+sgdUpdateG ::
+  (VectorSpace t) =>
+  -- | Learning rate.
+  Scalar t ->
+  -- | Initial value.
+  t ->
+  -- | Gradient of the value.
+  Grad t ->
+  -- | New value, after gradient descent update.
+  t
+sgdUpdateG r theta (Grad dtheta) = theta ^-^ (r *^ dtheta)
+
+-- | Example for supervised training.
+data Example i o = SupervisedExample
+  { example_input :: i,
+    example_output :: o
+  }
+
+-- | Batch of paired inputs and outputs for supervised training.
+newtype Batch i o = Batch {unBatch :: [Example i o]}
+
+-- | Loss function.
+newtype LossFn i o p = LossFn {unLossFn :: Batch i o -> (Float, Grad p)}
+
+-- | Perform a learning step of a batch of examples, updating parameters to
+--   their new values and returning the loss and new parameters.
+learningStep ::
+  forall i o t.
+  (VectorSpace t) =>
+  -- | Learning rate.
+  Scalar t ->
+  -- | Loss function.
+  LossFn i o t ->
+  -- | Batch of examples.
+  Batch i o ->
+  -- | Current parameter(s).
+  t ->
+  -- | Loss and updated parameter(s).
+  (Float, t)
+learningStep r (LossFn lf) batch theta = second (sgdUpdateG r theta) (lf batch)
 
 ---- Plotting -----------------------------------------------------------------
 

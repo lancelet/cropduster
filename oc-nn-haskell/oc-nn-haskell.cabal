@@ -18,7 +18,8 @@ library
     matplotlib ^>=0.7.7,
     path ^>=0.9.2,
     random ^>=1.2.1.1,
-    statistics ^>=0.16.2.1
+    statistics ^>=0.16.2.1,
+    vector-space ^>=0.16
 
 executable oc-nn-haskell
     main-is:          Main.hs
