@@ -189,9 +189,9 @@ linearFittingPointsAnimation out_dir = do
     lines = map fst train_result
 
   forM_ (zip [0..] lines) $ \(index :: Int, line) -> do
+    filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
     let
-      filename = printf "%0*d.png" (4 :: Int) index
-      outfile = out_dir </> Path.mkRelFile filename
+      outfile = out_dir </> filename
       xs = map pt_x training_pts
       ys = map pt_y training_pts
       x_min = minimum xs

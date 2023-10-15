@@ -1,4 +1,5 @@
 {-# LANGUAGE QuasiQuotes #-}
+
 module Main where
 
 import Data.List (intercalate)
@@ -7,11 +8,13 @@ import LinearFit
     Pt (Pt),
     defaultLinFitPts,
     fit,
+    linearFittingPointsAnimation,
     plotLineAndPts,
     plotPts,
-    linearFittingPointsAnimation
   )
+import Path (reldir, (</>), Path, Abs, Dir)
 import qualified Path
+import System.Directory (getCurrentDirectory, createDirectoryIfMissing)
 
 main :: IO ()
 main = do
@@ -32,5 +35,14 @@ main = do
       str :: String
       str = intercalate "\n" strs
 
-  linearFittingPointsAnimation [Path.reldir|plots|]
+  curDir <- getCurrentDirectory >>= Path.parseAbsDir
+
+  let plotDir = curDir </> [reldir|plots|]
+  ensureDir plotDir
+  linearFittingPointsAnimation plotDir
+
   putStrLn str
+
+-- | Ensure a directory exists, creating all necessary directories.
+ensureDir :: Path Abs Dir -> IO ()
+ensureDir dir = createDirectoryIfMissing True (Path.toFilePath dir)
