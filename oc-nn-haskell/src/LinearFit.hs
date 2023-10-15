@@ -1,4 +1,6 @@
+{-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeApplications #-}
 
 module LinearFit
   ( -- * Types
@@ -10,19 +12,20 @@ module LinearFit
     defaultLinFitPts,
     plotPts,
     plotLineAndPts,
-    linearFittingPointsAnimation
+    linearFittingPointsAnimation,
   )
 where
 
 import Control.Exception (assert)
+import Control.Monad (forM_)
+import Graphics.Matplotlib ((%))
 import qualified Graphics.Matplotlib as Plt
-import Path (Path, Abs, Dir, (</>))
+import Path (Abs, Dir, Path, (</>))
 import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
 import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
 import System.Random (Random, RandomGen, StdGen, mkStdGen, randoms, split)
 import Text.Printf (printf)
-import Control.Monad (forM_)
 
 -- | 2D Point.
 data Pt = Pt
@@ -117,8 +120,8 @@ lossGrad ::
 lossGrad line gt =
   let Pt x_gt y_gt = gt
       y_pred = linear line x_gt
-      dLossdTheta_0 = 2 * (y_pred - y_gt) * x_gt
-      dLossdTheta_1 = 2 * (y_pred - y_gt)
+      dLossdTheta_0 = 2 * (y_pred - y_gt)
+      dLossdTheta_1 = 2 * (y_pred - y_gt) * x_gt
    in LineGrad dLossdTheta_0 dLossdTheta_1
 
 -- | Perform a stochastic gradient descent update of the line parameters.
@@ -177,28 +180,29 @@ linearFittingPointsAnimation ::
   Path Abs Dir ->
   IO ()
 linearFittingPointsAnimation out_dir = do
-  let
-    training_pts = defaultLinFitPts
-    line = Line 0 0
-    gamma = 1e-3
+  let training_pts = concat (replicate 6 defaultLinFitPts)
+      line = Line 10 -1.2
+      gamma = 2e-2
 
-    train_result :: [(Line, Float)]
-    train_result = fit gamma line training_pts
+      train_result :: [(Line, Float)]
+      train_result = fit gamma line training_pts
 
-    lines :: [Line]
-    lines = map fst train_result
+      lines :: [Line]
+      lines = map fst train_result
 
-  forM_ (zip [0..] lines) $ \(index :: Int, line) -> do
+  forM_ (zip [0 ..] lines) $ \(index :: Int, line) -> do
     filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
-    let
-      outfile = out_dir </> filename
-      xs = map pt_x training_pts
-      ys = map pt_y training_pts
-      x_min = minimum xs
-      x_max = maximum xs
-      plot =
-        Plt.scatter xs ys
-        Plt.% Plt.line [x_min, x_max] [linear line x_min, linear line x_max]
+    let outfile = out_dir </> filename
+        xs = map pt_x training_pts
+        ys = map pt_y training_pts
+        x_min = -6 :: Float
+        x_max = 6 :: Float
+        plot =
+          Plt.scatter xs ys
+            % Plt.line [x_min, x_max] [linear line x_min, linear line x_max]
+            % Plt.xlim @Double @Double (realToFrac x_min) (realToFrac x_max)
+            % Plt.ylim @Double @Double -4 13
+    putStrLn $ "Rendering file: " <> Path.toFilePath filename
     Plt.file (Path.toFilePath outfile) plot
 
 ---- Generation of example points for linear fitting --------------------------
@@ -210,7 +214,7 @@ defaultLinFitPts =
       gen = mkStdGen seed
       line = Line 5.0 1.5
       n_points = 30
-      x_range = (0.0, 10.0)
+      x_range = (-5.0, 5.0)
       y_stdev = 0.75
    in take n_points (linFitPts gen line x_range y_stdev)
 

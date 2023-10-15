@@ -1,3 +1,4 @@
+{-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Main where
@@ -12,9 +13,9 @@ import LinearFit
     plotLineAndPts,
     plotPts,
   )
-import Path (reldir, (</>), Path, Abs, Dir)
+import Path (Abs, Dir, Path, reldir, (</>))
 import qualified Path
-import System.Directory (getCurrentDirectory, createDirectoryIfMissing)
+import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 
 main :: IO ()
 main = do
@@ -25,7 +26,7 @@ main = do
       training_pts = concat [pts, pts, pts]
 
       line = Line 0 0
-      gamma = 1e-3
+      gamma = 1e-2
       train_result :: [(Line, Float)]
       train_result = fit gamma line training_pts
 
