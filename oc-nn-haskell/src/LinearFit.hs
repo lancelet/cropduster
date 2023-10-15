@@ -8,13 +8,21 @@ module LinearFit
     -- * Functions
     fit,
     defaultLinFitPts,
+    plotPts,
+    plotLineAndPts,
+    linearFittingPointsAnimation
   )
 where
 
 import Control.Exception (assert)
+import qualified Graphics.Matplotlib as Plt
+import Path (Path, Abs, Dir, (</>))
+import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
 import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
 import System.Random (Random, RandomGen, StdGen, mkStdGen, randoms, split)
+import Text.Printf (printf)
+import Control.Monad (forM_)
 
 -- | 2D Point.
 data Pt = Pt
@@ -30,7 +38,8 @@ data Line = Line
     theta_0 :: Float,
     -- | slope of the line (ie. coefficient for input raised to first power).
     theta_1 :: Float
-  } deriving (Show)
+  }
+  deriving (Show)
 
 data LineGrad = LineGrad
   { dLossdTheta_0 :: Float,
@@ -130,6 +139,68 @@ sgdUpdate (Line c m) gamma (LineGrad dc dm) = Line c' m'
     c' = c - gamma * dc
     m' = m - gamma * dm
 
+---- Plotting -----------------------------------------------------------------
+
+-- | TODO: Docs.
+plotLineAndPts :: Path b t -> Line -> [Pt] -> IO ()
+plotLineAndPts outfile line pts = do
+  let xs, ys :: [Float]
+      xs = map pt_x pts
+      ys = map pt_y pts
+      x_min = minimum xs
+      x_max = maximum xs
+
+      scatter_plt :: Plt.Matplotlib
+      scatter_plt = Plt.scatter xs ys
+
+      line_plt :: Plt.Matplotlib
+      line_plt = Plt.line [x_min, x_max] [linear line x_min, linear line x_max]
+
+      plot :: Plt.Matplotlib
+      plot = scatter_plt Plt.% line_plt
+
+  result <- Plt.file (Path.toFilePath outfile) plot
+  -- TODO: Handle error
+
+  pure ()
+
+-- | TODO: Docs.
+plotPts :: [Pt] -> IO ()
+plotPts pts = Plt.onscreen $ Plt.scatter xs ys
+  where
+    xs = map pt_x pts
+    ys = map pt_y pts
+
+---- Animated sequence generation ---------------------------------------------
+
+linearFittingPointsAnimation ::
+  Path Abs Dir ->
+  IO ()
+linearFittingPointsAnimation out_dir = do
+  let
+    training_pts = defaultLinFitPts
+    line = Line 0 0
+    gamma = 1e-3
+
+    train_result :: [(Line, Float)]
+    train_result = fit gamma line training_pts
+
+    lines :: [Line]
+    lines = map fst train_result
+
+  forM_ (zip [0..] lines) $ \(index :: Int, line) -> do
+    let
+      filename = printf "%0*d.png" (4 :: Int) index
+      outfile = out_dir </> Path.mkRelFile filename
+      xs = map pt_x training_pts
+      ys = map pt_y training_pts
+      x_min = minimum xs
+      x_max = maximum xs
+      plot =
+        Plt.scatter xs ys
+        Plt.% Plt.line [x_min, x_max] [linear line x_min, linear line x_max]
+    Plt.file (Path.toFilePath outfile) plot
+
 ---- Generation of example points for linear fitting --------------------------
 
 -- | A default (finite) set of points used for the linear fitting example.
@@ -140,7 +211,7 @@ defaultLinFitPts =
       line = Line 5.0 1.5
       n_points = 30
       x_range = (0.0, 10.0)
-      y_stdev = 2.5
+      y_stdev = 0.75
    in take n_points (linFitPts gen line x_range y_stdev)
 
 -- | Generate points with pseudo-random noise for a linear fit.
@@ -203,7 +274,10 @@ normals ::
   (a, a) ->
   -- | Infinite list of generated values.
   [a]
-normals gen (mean, stdev) = map (quantile_rf normal_dist) (randoms gen)
+normals gen (mean, stdev) =
+  if stdev > 0
+    then map (quantile_rf normal_dist) (randoms gen)
+    else repeat 0
   where
     normal_dist :: NormalDistribution
     normal_dist = normalDistr (realToFrac mean) (realToFrac stdev)
