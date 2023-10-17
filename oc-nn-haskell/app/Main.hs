@@ -27,7 +27,7 @@ main = do
 
       line = Line 0 0
       gamma = 1e-2
-      train_result :: [(Line, Float)]
+      train_result :: [(Float, Line)]
       train_result = fit gamma line training_pts
 
       strs :: [String]

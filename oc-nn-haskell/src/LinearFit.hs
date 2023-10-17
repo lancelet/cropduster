@@ -50,11 +50,6 @@ data Line = Line
   }
   deriving (Show, Generic, AdditiveGroup, VectorSpace)
 
-data LineGrad = LineGrad
-  { dLossdTheta_0 :: Float,
-    dLossdTheta_1 :: Float
-  }
-
 -- | Given parameters of a linear relationship, apply the equation for the
 --   line to an input.
 linear :: Line -> Float -> Float
@@ -73,36 +68,19 @@ fit ::
   [Pt] ->
   -- | List of linear parameters and losses produced during each step of
   --   fitting.
-  [(Line, Float)]
-fit gamma line [] = []
-fit gamma line (pt : pts) =
-  let (line', loss) = step gamma line pt
-   in (line', loss) : fit gamma line' pts
+  [(Float, Line)]
+fit r line pts = fitG r linfitLossFn batches line
+  where
+    batches :: [Batch Float Float]
+    batches = fmap (\(Pt x y) -> [Example x y]) pts
 
--- | A single learning step.
---
--- Use the error obtained from estimating the point's y-coordinate to update
--- the parameters of the line using stochastic gradient descent.
-step ::
-  -- | Learning rate.
-  Float ->
-  -- | Current parameters of the line.
-  Line ->
-  -- | Point to use for this step (ground truth).
-  Pt ->
-  -- | Updated line parameters, and the (previous) loss for this point.
-  (Line, Float)
-step gamma line (Pt x y) =
-  let (loss, line') = learningStep gamma linfitLossFn [Example x y] line
-   in (line', loss)
-
----- Generic SGD --------------------------------------------------------------
+---- SGD ----------------------------------------------------------------------
 
 -- | Mark a type as being a gradient.
 newtype Grad p = Grad p deriving (Generic, AdditiveGroup, VectorSpace)
 
 -- | Perform a gradient descent update of a value.
-sgdUpdateG ::
+sgdUpdate ::
   (VectorSpace t) =>
   -- | Learning rate.
   Scalar t ->
@@ -112,11 +90,13 @@ sgdUpdateG ::
   Grad t ->
   -- | New value, after gradient descent update.
   t
-sgdUpdateG r theta (Grad dtheta) = theta ^-^ (r *^ dtheta)
+sgdUpdate r theta (Grad dtheta) = theta ^-^ (r *^ dtheta)
 
 -- | Example for supervised training.
 data Example i o = Example
-  { example_input :: i,
+  { -- | Input value.
+    example_input :: i,
+    -- | Expected result.
     example_output :: o
   }
 
@@ -125,9 +105,9 @@ type Batch i o = [Example i o]
 
 -- | Loss function.
 --
--- A loss function takes a batch of examples and returns a tuple containing
--- the value of the loss and the gradient of loss with respect to all the
--- parameters.
+-- A loss function takes a batch of examples along with the current learnable
+-- parameters and returns a tuple containing the value of the loss and the
+-- gradient of loss with respect to all the parameters.
 type LossFn i o t = Batch i o -> t -> (Float, Grad t)
 
 -- | Perform a learning step of a batch of examples, updating parameters to
@@ -139,13 +119,35 @@ learningStep ::
   Scalar t ->
   -- | Loss function.
   LossFn i o t ->
-  -- | Batch of examples.
-  Batch i o ->
   -- | Current parameter(s).
   t ->
+  -- | Batch of examples.
+  Batch i o ->
   -- | Loss and updated parameter(s).
   (Float, t)
-learningStep r lf batch t = second (sgdUpdateG r t) (lf batch t)
+learningStep r lf t batch = second (sgdUpdate r t) (lf batch t)
+
+-- | Fit a sequence of batches.
+fitG ::
+  forall i o t.
+  (VectorSpace t) =>
+  -- | Learning rate.
+  Scalar t ->
+  -- | Loss function.
+  LossFn i o t ->
+  -- | List of batches to process.
+  [Batch i o] ->
+  -- | Initial parameter.
+  t ->
+  -- | List of loss and updated parameters after each batch.
+  [(Float, t)]
+fitG r lf batches t = scanl step (initLoss, t) batches
+  where
+    initLoss :: Float
+    initLoss = fst $ lf (head batches) t
+
+    step :: (Float, t) -> Batch i o -> (Float, t)
+    step (_, p) = learningStep r lf p
 
 ---- Generic Linear Fit -------------------------------------------------------
 
@@ -214,11 +216,11 @@ linearFittingPointsAnimation out_dir = do
       line = Line 10 -1.2
       gamma = 2e-2
 
-      train_result :: [(Line, Float)]
+      train_result :: [(Float, Line)]
       train_result = fit gamma line training_pts
 
       lines :: [Line]
-      lines = map fst train_result
+      lines = map snd train_result
 
   forM_ (zip [0 ..] lines) $ \(index :: Int, line) -> do
     filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
