@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications #-}
@@ -20,7 +22,8 @@ where
 import Control.Exception (assert)
 import Control.Monad (forM_)
 import Data.Bifunctor (second)
-import Data.VectorSpace (AdditiveGroup, Scalar, VectorSpace, (*^), (^-^))
+import Data.VectorSpace (AdditiveGroup (zeroV), Scalar, VectorSpace, (*^), (^+^), (^-^), (^/))
+import GHC.Generics (Generic)
 import Graphics.Matplotlib ((%))
 import qualified Graphics.Matplotlib as Plt
 import Path (Abs, Dir, Path, (</>))
@@ -45,7 +48,7 @@ data Line = Line
     -- | slope of the line (ie. coefficient for input raised to first power).
     theta_1 :: Float
   }
-  deriving (Show)
+  deriving (Show, Generic, AdditiveGroup, VectorSpace)
 
 data LineGrad = LineGrad
   { dLossdTheta_0 :: Float,
@@ -89,66 +92,14 @@ step ::
   Pt ->
   -- | Updated line parameters, and the (previous) loss for this point.
   (Line, Float)
-step gamma line gt = (sgdUpdate line gamma (lossGrad line gt), loss line gt)
-
--- | Loss function for fitting a single ground truth point.
---
--- This returns the squared difference between the predicted y-value of the
--- provided point and its actual y-value.
-loss ::
-  -- | Current parameters of the line.
-  Line ->
-  -- | Point from the ground-truth dataset we're trying to fit.
-  Pt ->
-  -- | Square of the error between actual y-value and predicted y-value.
-  Float
-loss line gt =
-  let Pt x_gt y_gt = gt
-      -- y_pred is the predicted y value given the current line
-      y_pred = linear line x_gt
-      -- err_y is the difference between the ground-truth y and predicted y
-      err_y = y_gt - y_pred
-   in -- the returned value is the difference squared
-      err_y * err_y
-
--- | Compute the gradient of 'loss' with respect to the line fit parameters at
---   a single ground truth point.
-lossGrad ::
-  -- | Current parameters of the line.
-  Line ->
-  -- | Point from the ground-truth dataset we're trying to fit.
-  Pt ->
-  -- | Gradient of the loss wrt each line parameter.
-  LineGrad
-lossGrad line gt =
-  let Pt x_gt y_gt = gt
-      y_pred = linear line x_gt
-      dLossdTheta_0 = 2 * (y_pred - y_gt)
-      dLossdTheta_1 = 2 * (y_pred - y_gt) * x_gt
-   in LineGrad dLossdTheta_0 dLossdTheta_1
-
--- | Perform a stochastic gradient descent update of the line parameters.
---
--- See: https://en.wikipedia.org/wiki/Gradient_descent
--- For a description of the overall approach.
-sgdUpdate ::
-  -- | Current parameters of the line.
-  Line ->
-  -- | Learning rate.
-  Float ->
-  -- | Gradient of loss with respect to the line parameters.
-  LineGrad ->
-  -- | New parameters of the line.
-  Line
-sgdUpdate (Line c m) gamma (LineGrad dc dm) = Line c' m'
-  where
-    c' = c - gamma * dc
-    m' = m - gamma * dm
+step gamma line (Pt x y) =
+  let (loss, line') = learningStep gamma linfitLossFn [Example x y] line
+   in (line', loss)
 
 ---- Generic SGD --------------------------------------------------------------
 
 -- | Mark a type as being a gradient.
-newtype Grad p = Grad p
+newtype Grad p = Grad p deriving (Generic, AdditiveGroup, VectorSpace)
 
 -- | Perform a gradient descent update of a value.
 sgdUpdateG ::
@@ -164,16 +115,20 @@ sgdUpdateG ::
 sgdUpdateG r theta (Grad dtheta) = theta ^-^ (r *^ dtheta)
 
 -- | Example for supervised training.
-data Example i o = SupervisedExample
+data Example i o = Example
   { example_input :: i,
     example_output :: o
   }
 
 -- | Batch of paired inputs and outputs for supervised training.
-newtype Batch i o = Batch {unBatch :: [Example i o]}
+type Batch i o = [Example i o]
 
 -- | Loss function.
-newtype LossFn i o p = LossFn {unLossFn :: Batch i o -> (Float, Grad p)}
+--
+-- A loss function takes a batch of examples and returns a tuple containing
+-- the value of the loss and the gradient of loss with respect to all the
+-- parameters.
+type LossFn i o t = Batch i o -> t -> (Float, Grad t)
 
 -- | Perform a learning step of a batch of examples, updating parameters to
 --   their new values and returning the loss and new parameters.
@@ -190,7 +145,32 @@ learningStep ::
   t ->
   -- | Loss and updated parameter(s).
   (Float, t)
-learningStep r (LossFn lf) batch theta = second (sgdUpdateG r theta) (lf batch)
+learningStep r lf batch t = second (sgdUpdateG r t) (lf batch t)
+
+---- Generic Linear Fit -------------------------------------------------------
+
+-- | Loss function for a linear fit.
+linfitLossFn :: LossFn Float Float Line
+linfitLossFn egs line = (mean (egLoss <$> egs), mean (egGradLoss <$> egs))
+  where
+    egLoss :: Example Float Float -> Float
+    egLoss (Example x y) = (linear line x - y) ** 2
+
+    egGradLoss :: Example Float Float -> Grad Line
+    egGradLoss (Example x y) = Grad (Line dTheta_0 dTheta_1)
+      where
+        y' = linear line x
+        dTheta_0 = 2 * (y' - y)
+        dTheta_1 = 2 * (y' - y) * x
+
+-- | Compute the mean of a list.
+mean :: forall v s. (VectorSpace v, s ~ Scalar v, Fractional s) => [v] -> v
+mean [] = error "Cannot compute mean of an empty list."
+mean xs = go 0 zeroV xs
+  where
+    go :: (Fractional s, s ~ Scalar v) => Int -> v -> [v] -> v
+    go n sum [] = sum ^/ fromIntegral n
+    go n sum (x : xs) = go (n + 1) (sum ^+^ x) xs
 
 ---- Plotting -----------------------------------------------------------------
 
