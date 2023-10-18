@@ -18,6 +18,7 @@ library
     matplotlib ^>=0.7.7,
     path ^>=0.9.2,
     random ^>=1.2.1.1,
+    random-shuffle ^>=0.0.4,
     statistics ^>=0.16.2.1,
     vector-space ^>=0.16
 

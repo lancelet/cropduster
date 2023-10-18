@@ -5,11 +5,14 @@ module Main where
 
 import Data.List (intercalate)
 import LinearFit
-  ( Line (Line),
+  ( Batch,
+    Example (Example),
+    Line (Line),
     Pt (Pt),
     defaultLinFitPts,
     fit,
     linearFittingPointsAnimation,
+    linfitLossFn,
     plotLineAndPts,
     plotPts,
   )
@@ -28,7 +31,10 @@ main = do
       line = Line 0 0
       gamma = 1e-2
       train_result :: [(Float, Line)]
-      train_result = fit gamma line training_pts
+      train_result = fit gamma linfitLossFn batches line
+        where
+          batches :: [Batch Float Float]
+          batches = fmap (\(Pt x y) -> [Example x y]) training_pts
 
       strs :: [String]
       strs = map (\(Pt x y) -> "(" <> show x <> ", " <> show y <> ")") pts

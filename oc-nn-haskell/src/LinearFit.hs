@@ -9,13 +9,16 @@ module LinearFit
   ( -- * Types
     Pt (Pt, pt_x, pt_y),
     Line (Line, theta_0, theta_1),
+    Batch,
+    Example (Example),
 
     -- * Functions
-    fit,
     defaultLinFitPts,
+    fit,
+    linearFittingPointsAnimation,
+    linfitLossFn,
     plotPts,
     plotLineAndPts,
-    linearFittingPointsAnimation,
   )
 where
 
@@ -55,25 +58,6 @@ data Line = Line
 linear :: Line -> Float -> Float
 linear (Line c m) x = m * x + c
 
----- Linear fitting with SGD --------------------------------------------------
-
--- | Perform an SGD learning update for each of the supplied points.
-fit ::
-  -- | Learning rate.
-  Float ->
-  -- | Initial parameters of the line.
-  Line ->
-  -- | Points on which to perform learning updates. One point at a time is
-  --   used to update the line parameters.
-  [Pt] ->
-  -- | List of linear parameters and losses produced during each step of
-  --   fitting.
-  [(Float, Line)]
-fit r line pts = fitG r linfitLossFn batches line
-  where
-    batches :: [Batch Float Float]
-    batches = fmap (\(Pt x y) -> [Example x y]) pts
-
 ---- SGD ----------------------------------------------------------------------
 
 -- | Mark a type as being a gradient.
@@ -103,14 +87,14 @@ data Example i o = Example
 -- | Batch of paired inputs and outputs for supervised training.
 type Batch i o = [Example i o]
 
--- | Loss function.
+-- | Loss function with derivative.
 --
 -- A loss function takes a batch of examples along with the current learnable
 -- parameters and returns a tuple containing the value of the loss and the
 -- gradient of loss with respect to all the parameters.
-type LossFn i o t = Batch i o -> t -> (Float, Grad t)
+type LossFnD i o t = Batch i o -> t -> (Float, Grad t)
 
--- | Perform a learning step of a batch of examples, updating parameters to
+-- | Perform a learning step on a batch of examples, updating parameters to
 --   their new values and returning the loss and new parameters.
 learningStep ::
   forall i o t.
@@ -118,7 +102,7 @@ learningStep ::
   -- | Learning rate.
   Scalar t ->
   -- | Loss function.
-  LossFn i o t ->
+  LossFnD i o t ->
   -- | Current parameter(s).
   t ->
   -- | Batch of examples.
@@ -128,20 +112,20 @@ learningStep ::
 learningStep r lf t batch = second (sgdUpdate r t) (lf batch t)
 
 -- | Fit a sequence of batches.
-fitG ::
+fit ::
   forall i o t.
   (VectorSpace t) =>
   -- | Learning rate.
   Scalar t ->
   -- | Loss function.
-  LossFn i o t ->
+  LossFnD i o t ->
   -- | List of batches to process.
   [Batch i o] ->
   -- | Initial parameter.
   t ->
   -- | List of loss and updated parameters after each batch.
   [(Float, t)]
-fitG r lf batches t = scanl step (initLoss, t) batches
+fit r lf batches t = scanl step (initLoss, t) batches
   where
     initLoss :: Float
     initLoss = fst $ lf (head batches) t
@@ -152,7 +136,7 @@ fitG r lf batches t = scanl step (initLoss, t) batches
 ---- Generic Linear Fit -------------------------------------------------------
 
 -- | Loss function for a linear fit.
-linfitLossFn :: LossFn Float Float Line
+linfitLossFn :: LossFnD Float Float Line
 linfitLossFn egs line = (mean (egLoss <$> egs), mean (egGradLoss <$> egs))
   where
     egLoss :: Example Float Float -> Float
@@ -217,7 +201,10 @@ linearFittingPointsAnimation out_dir = do
       gamma = 2e-2
 
       train_result :: [(Float, Line)]
-      train_result = fit gamma line training_pts
+      train_result = fit gamma linfitLossFn batches line
+        where
+          batches :: [Batch Float Float]
+          batches = fmap (\(Pt x y) -> [Example x y]) training_pts
 
       lines :: [Line]
       lines = map snd train_result
