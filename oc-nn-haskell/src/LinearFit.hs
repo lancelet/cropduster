@@ -17,8 +17,6 @@ module LinearFit
     fit,
     linearFittingPointsAnimation,
     linfitLossFn,
-    plotPts,
-    plotLineAndPts,
   )
 where
 
@@ -157,38 +155,6 @@ mean xs = go 0 zeroV xs
     go :: (Fractional s, s ~ Scalar v) => Int -> v -> [v] -> v
     go n sum [] = sum ^/ fromIntegral n
     go n sum (x : xs) = go (n + 1) (sum ^+^ x) xs
-
----- Plotting -----------------------------------------------------------------
-
--- | TODO: Docs.
-plotLineAndPts :: Path b t -> Line -> [Pt] -> IO ()
-plotLineAndPts outfile line pts = do
-  let xs, ys :: [Float]
-      xs = map pt_x pts
-      ys = map pt_y pts
-      x_min = minimum xs
-      x_max = maximum xs
-
-      scatter_plt :: Plt.Matplotlib
-      scatter_plt = Plt.scatter xs ys
-
-      line_plt :: Plt.Matplotlib
-      line_plt = Plt.line [x_min, x_max] [linear line x_min, linear line x_max]
-
-      plot :: Plt.Matplotlib
-      plot = scatter_plt Plt.% line_plt
-
-  result <- Plt.file (Path.toFilePath outfile) plot
-  -- TODO: Handle error
-
-  pure ()
-
--- | TODO: Docs.
-plotPts :: [Pt] -> IO ()
-plotPts pts = Plt.onscreen $ Plt.scatter xs ys
-  where
-    xs = map pt_x pts
-    ys = map pt_y pts
 
 ---- Animated sequence generation ---------------------------------------------
 

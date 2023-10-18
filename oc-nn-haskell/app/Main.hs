@@ -13,8 +13,6 @@ import LinearFit
     fit,
     linearFittingPointsAnimation,
     linfitLossFn,
-    plotLineAndPts,
-    plotPts,
   )
 import Path (Abs, Dir, Path, reldir, (</>))
 import qualified Path
