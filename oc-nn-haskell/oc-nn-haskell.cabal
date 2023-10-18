@@ -19,6 +19,7 @@ library
     path ^>=0.9.2,
     random ^>=1.2.1.1,
     random-shuffle ^>=0.0.4,
+    split ^>=0.2.4,
     statistics ^>=0.16.2.1,
     vector-space ^>=0.16
 

@@ -1,4 +1,3 @@
-{-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Main where
@@ -11,7 +10,7 @@ import LinearFit
     Pt (Pt),
     defaultLinFitPts,
     fit,
-    linearFittingPointsAnimation,
+    linearFittingAnimation,
     linfitLossFn,
   )
 import Path (Abs, Dir, Path, reldir, (</>))
@@ -20,33 +19,10 @@ import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
 
 main :: IO ()
 main = do
-  let pts :: [Pt]
-      pts = defaultLinFitPts
-
-      training_pts :: [Pt]
-      training_pts = concat [pts, pts, pts]
-
-      line = Line 0 0
-      gamma = 1e-2
-      train_result :: [(Float, Line)]
-      train_result = fit gamma linfitLossFn batches line
-        where
-          batches :: [Batch Float Float]
-          batches = fmap (\(Pt x y) -> [Example x y]) training_pts
-
-      strs :: [String]
-      strs = map (\(Pt x y) -> "(" <> show x <> ", " <> show y <> ")") pts
-
-      str :: String
-      str = intercalate "\n" strs
-
   curDir <- getCurrentDirectory >>= Path.parseAbsDir
-
   let plotDir = curDir </> [reldir|plots|]
   ensureDir plotDir
-  linearFittingPointsAnimation plotDir
-
-  putStrLn str
+  linearFittingAnimation plotDir 4 2e-2
 
 -- | Ensure a directory exists, creating all necessary directories.
 ensureDir :: Path Abs Dir -> IO ()

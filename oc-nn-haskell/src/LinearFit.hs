@@ -15,7 +15,7 @@ module LinearFit
     -- * Functions
     defaultLinFitPts,
     fit,
-    linearFittingPointsAnimation,
+    linearFittingAnimation,
     linfitLossFn,
   )
 where
@@ -23,14 +23,17 @@ where
 import Control.Exception (assert)
 import Control.Monad (forM_)
 import Data.Bifunctor (second)
+import Data.List.Split (chunksOf)
+import Data.Maybe (fromMaybe)
 import Data.VectorSpace (AdditiveGroup (zeroV), Scalar, VectorSpace, (*^), (^+^), (^-^), (^/))
 import GHC.Generics (Generic)
-import Graphics.Matplotlib ((%))
+import Graphics.Matplotlib ((%), (@@))
 import qualified Graphics.Matplotlib as Plt
 import Path (Abs, Dir, Path, (</>))
 import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
 import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
+import Statistics.Quantile (Default (def))
 import System.Random (Random, RandomGen, StdGen, mkStdGen, randoms, split)
 import Text.Printf (printf)
 
@@ -81,6 +84,7 @@ data Example i o = Example
     -- | Expected result.
     example_output :: o
   }
+  deriving (Eq)
 
 -- | Batch of paired inputs and outputs for supervised training.
 type Batch i o = [Example i o]
@@ -131,9 +135,13 @@ fit r lf batches t = scanl step (initLoss, t) batches
     step :: (Float, t) -> Batch i o -> (Float, t)
     step (_, p) = learningStep r lf p
 
----- Generic Linear Fit -------------------------------------------------------
+---- Linear Fit ---------------------------------------------------------------
 
 -- | Loss function for a linear fit.
+--
+-- The loss function takes a batch of examples, and returns the least-squares
+-- difference between predicted values and actual values. It also returns the
+-- gradient of this value with respect to each parameter of the line.
 linfitLossFn :: LossFnD Float Float Line
 linfitLossFn egs line = (mean (egLoss <$> egs), mean (egGradLoss <$> egs))
   where
@@ -158,37 +166,75 @@ mean xs = go 0 zeroV xs
 
 ---- Animated sequence generation ---------------------------------------------
 
-linearFittingPointsAnimation ::
+-- | Produce an animation of linear fitting for demonstration purposes.
+--
+-- This calls matplotlib, outputting individual PNG files showing the
+-- progress of linear fitting via SGD.
+linearFittingAnimation ::
+  -- | Parent directory for output of PNG files. This must exist.
   Path Abs Dir ->
+  -- | Batch size to use.
+  Int ->
+  -- | Learning rate.
+  Float ->
+  -- | IO action to create the animation.
   IO ()
-linearFittingPointsAnimation out_dir = do
-  let training_pts = concat (replicate 6 defaultLinFitPts)
-      line = Line 10 -1.2
-      gamma = 2e-2
+linearFittingAnimation out_dir batch_size r = do
+  let init_line = Line 10 -1.2
 
-      train_result :: [(Float, Line)]
-      train_result = fit gamma linfitLossFn batches line
-        where
-          batches :: [Batch Float Float]
-          batches = fmap (\(Pt x y) -> [Example x y]) training_pts
+      n_epochs = 4 :: Int
 
-      lines :: [Line]
-      lines = map snd train_result
+      lin_fit_examples :: [Example Float Float]
+      lin_fit_examples =
+        concat $
+          replicate n_epochs $
+            fmap (\(Pt x y) -> Example x y) defaultLinFitPts
 
-  forM_ (zip [0 ..] lines) $ \(index :: Int, line) -> do
-    filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
-    let outfile = out_dir </> filename
-        xs = map pt_x training_pts
-        ys = map pt_y training_pts
-        x_min = -6 :: Float
-        x_max = 6 :: Float
-        plot =
-          Plt.scatter xs ys
-            % Plt.line [x_min, x_max] [linear line x_min, linear line x_max]
-            % Plt.xlim @Double @Double (realToFrac x_min) (realToFrac x_max)
-            % Plt.ylim @Double @Double -4 13
-    putStrLn $ "Rendering file: " <> Path.toFilePath filename
-    Plt.file (Path.toFilePath outfile) plot
+      training_examples :: [Example Float Float]
+      training_examples = concat $ replicate 6 lin_fit_examples
+
+      batches :: [Batch Float Float]
+      batches = chunksOf batch_size training_examples
+
+      fits :: [(Float, Line)]
+      fits = fit r linfitLossFn batches init_line
+
+      batch_and_outcome :: [(Maybe (Batch Float Float), Float, Line)]
+      batch_and_outcome =
+        (\(m, (l, t)) -> (m, l, t))
+          <$> zip (Nothing : fmap Just batches) fits
+   in forM_ (zip [0 ..] batch_and_outcome) $
+        \(index :: Int, (maybe_batch, loss, line)) -> do
+          filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
+          let outfile = out_dir </> filename
+
+              batch_examples :: [Example Float Float]
+              batch_examples = fromMaybe [] maybe_batch
+
+              bg_examples :: [Example Float Float]
+              bg_examples = filter (`notElem` batch_examples) lin_fit_examples
+
+              xs_bg = fmap example_input bg_examples
+              ys_bg = fmap example_output bg_examples
+
+              xs_batch = fmap example_input batch_examples
+              ys_batch = fmap example_output batch_examples
+
+              x_min = -6 :: Float
+              x_max = 6 :: Float
+              plot =
+                Plt.scatter xs_bg ys_bg
+                  % Plt.scatter xs_batch ys_batch
+                    @@ [Plt.o2 "color" ["red"]]
+                  % Plt.line
+                    [x_min, x_max]
+                    [linear line x_min, linear line x_max]
+                  % Plt.xlim @Double @Double
+                    (realToFrac x_min)
+                    (realToFrac x_max)
+                  % Plt.ylim @Double @Double -4 13
+          putStrLn $ "Rendering file: " <> Path.toFilePath filename
+          Plt.file (Path.toFilePath outfile) plot
 
 ---- Generation of example points for linear fitting --------------------------
 
