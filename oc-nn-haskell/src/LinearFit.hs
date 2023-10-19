@@ -33,8 +33,7 @@ import Path (Abs, Dir, Path, (</>))
 import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
 import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
-import Statistics.Quantile (Default (def))
-import System.Random (Random, RandomGen, StdGen, mkStdGen, randoms, split)
+import System.Random (Random, RandomGen, mkStdGen, randoms, split)
 import Text.Printf (printf)
 
 -- | 2D Point.
@@ -168,8 +167,8 @@ mean [] = error "Cannot compute mean of an empty list."
 mean xs = go 0 zeroV xs
   where
     go :: (Fractional s, s ~ Scalar v) => Int -> v -> [v] -> v
-    go n sum [] = sum ^/ fromIntegral n
-    go n sum (x : xs) = go (n + 1) (sum ^+^ x) xs
+    go n run_sum [] = run_sum ^/ fromIntegral n
+    go n run_sum (y : ys) = go (n + 1) (run_sum ^+^ y) ys
 
 ---- Animated sequence generation ---------------------------------------------
 
@@ -219,7 +218,7 @@ linearFittingAnimation out_dir max_frames batch_size r = do
         (\(m, (l, t)) -> (m, l, t))
           <$> zip (Nothing : fmap Just batches) fits
    in forM_ (zip [0 .. (max_frames - 1)] batch_and_outcome) $
-        \(index :: Int, (maybe_batch, loss, line)) -> do
+        \(index :: Int, (maybe_batch, _loss, line)) -> do
           filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
           let outfile = out_dir </> filename
 
@@ -276,16 +275,15 @@ lsqFit pts =
       square :: Float -> Float
       square x = x * x
 
-      s_x, s_y, s_xx, s_yy, s_xy :: Float
+      s_x, s_y, s_xx, s_xy :: Float
       s_x = sum xs
       s_y = sum ys
       s_xx = sum $ square <$> xs
-      s_yy = sum $ square <$> ys
       s_xy = sum $ (\(Pt x y) -> x * y) <$> pts
 
-      theta_1 = (nf * s_xy - s_x * s_y) / (nf * s_xx - s_x * s_x)
-      theta_0 = (1 / nf) * s_y - theta_1 * (1 / nf) * s_x
-   in Line theta_0 theta_1
+      theta_1' = (nf * s_xy - s_x * s_y) / (nf * s_xx - s_x * s_x)
+      theta_0' = (1 / nf) * s_y - theta_1' * (1 / nf) * s_x
+   in Line theta_0' theta_1'
 
 ---- Generation of example points for linear fitting --------------------------
 
@@ -360,13 +358,13 @@ normals ::
   (a, a) ->
   -- | Infinite list of generated values.
   [a]
-normals gen (mean, stdev) =
+normals gen (mu, stdev) =
   if stdev > 0
     then map (quantile_rf normal_dist) (randoms gen)
     else repeat 0
   where
     normal_dist :: NormalDistribution
-    normal_dist = normalDistr (realToFrac mean) (realToFrac stdev)
+    normal_dist = normalDistr (realToFrac mu) (realToFrac stdev)
 
     quantile_rf :: (ContDistr d) => d -> a -> a
     quantile_rf dist x = realToFrac (quantile dist (realToFrac x))
