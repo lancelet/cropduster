@@ -2,17 +2,7 @@
 
 module Main where
 
-import Data.List (intercalate)
-import LinearFit
-  ( Batch,
-    Example (Example),
-    Line (Line),
-    Pt (Pt),
-    defaultLinFitPts,
-    fit,
-    linearFittingAnimation,
-    linfitLossFn,
-  )
+import LinearFit (linearFittingAnimation)
 import Path (Abs, Dir, Path, reldir, (</>))
 import qualified Path
 import System.Directory (createDirectoryIfMissing, getCurrentDirectory)
@@ -21,8 +11,16 @@ main :: IO ()
 main = do
   curDir <- getCurrentDirectory >>= Path.parseAbsDir
   let plotDir = curDir </> [reldir|plots|]
-  ensureDir plotDir
-  linearFittingAnimation plotDir 4 2e-2
+
+  -- Plot linear fits with 1 batch element
+  let linFitBS1 = plotDir </> [reldir|linfit-bs1|]
+  ensureDir linFitBS1
+  linearFittingAnimation linFitBS1 120 1 2e-2
+
+  -- Plot linear fits with 4 batch element
+  let linFitBS4 = plotDir </> [reldir|linfit-bs4|]
+  ensureDir linFitBS4
+  linearFittingAnimation linFitBS4 120 4 2e-2
 
 -- | Ensure a directory exists, creating all necessary directories.
 ensureDir :: Path Abs Dir -> IO ()

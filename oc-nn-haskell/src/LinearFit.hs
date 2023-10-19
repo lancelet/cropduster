@@ -62,9 +62,11 @@ linear (Line c m) x = m * x + c
 ---- SGD ----------------------------------------------------------------------
 
 -- | Mark a type as being a gradient.
-newtype Grad p = Grad p deriving (Generic, AdditiveGroup, VectorSpace)
+newtype Grad t = Grad t deriving (Generic, AdditiveGroup, VectorSpace)
 
 -- | Perform a gradient descent update of a value.
+--
+-- This is a single step of SGD learning.
 sgdUpdate ::
   (VectorSpace t) =>
   -- | Learning rate.
@@ -98,6 +100,9 @@ type LossFnD i o t = Batch i o -> t -> (Float, Grad t)
 
 -- | Perform a learning step on a batch of examples, updating parameters to
 --   their new values and returning the loss and new parameters.
+--
+-- A learning step combines calculating the loss with an SGD update of the
+-- parameters.
 learningStep ::
   forall i o t.
   (VectorSpace t) =>
@@ -114,6 +119,8 @@ learningStep ::
 learningStep r lf t batch = second (sgdUpdate r t) (lf batch t)
 
 -- | Fit a sequence of batches.
+--
+-- Fitting runs multiple learning steps across all batches.
 fit ::
   forall i o t.
   (VectorSpace t) =>
@@ -173,16 +180,24 @@ mean xs = go 0 zeroV xs
 linearFittingAnimation ::
   -- | Parent directory for output of PNG files. This must exist.
   Path Abs Dir ->
+  -- | Maximum number of frames to render.
+  --
+  -- The actual number of rendered frames may be less than this depending on the
+  -- dataset size, batch size and number of epochs.
+  Int ->
   -- | Batch size to use.
   Int ->
   -- | Learning rate.
   Float ->
   -- | IO action to create the animation.
   IO ()
-linearFittingAnimation out_dir batch_size r = do
+linearFittingAnimation out_dir max_frames batch_size r = do
   let init_line = Line 10 -1.2
 
       n_epochs = 4 :: Int
+
+      llsq :: Line
+      llsq = lsqFit defaultLinFitPts
 
       lin_fit_examples :: [Example Float Float]
       lin_fit_examples =
@@ -203,7 +218,7 @@ linearFittingAnimation out_dir batch_size r = do
       batch_and_outcome =
         (\(m, (l, t)) -> (m, l, t))
           <$> zip (Nothing : fmap Just batches) fits
-   in forM_ (zip [0 ..] batch_and_outcome) $
+   in forM_ (zip [0 .. (max_frames - 1)] batch_and_outcome) $
         \(index :: Int, (maybe_batch, loss, line)) -> do
           filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
           let outfile = out_dir </> filename
@@ -225,16 +240,52 @@ linearFittingAnimation out_dir batch_size r = do
               plot =
                 Plt.scatter xs_bg ys_bg
                   % Plt.scatter xs_batch ys_batch
-                    @@ [Plt.o2 "color" ["red"]]
+                    @@ [Plt.o2 "color" "red"]
                   % Plt.line
                     [x_min, x_max]
                     [linear line x_min, linear line x_max]
+                  % Plt.plot
+                    [x_min, x_max]
+                    [linear llsq x_min, linear llsq x_max]
+                    @@ [Plt.o2 "ls" "--"]
                   % Plt.xlim @Double @Double
                     (realToFrac x_min)
                     (realToFrac x_max)
                   % Plt.ylim @Double @Double -4 13
-          putStrLn $ "Rendering file: " <> Path.toFilePath filename
+          putStrLn $ "Rendering file: " <> Path.toFilePath outfile
           Plt.file (Path.toFilePath outfile) plot
+
+---- Closed-form least-squares linear fitting ---------------------------------
+
+-- | Return a least-squares linear fit obtained from the closed-form least
+--   squares equations.
+lsqFit :: [Pt] -> Line
+lsqFit [] = error "cannot least-squares fit an empty list"
+lsqFit [_] = error "cannot least-squares fit a single point"
+lsqFit pts =
+  let n :: Int
+      n = length pts
+
+      nf :: Float
+      nf = fromIntegral n
+
+      xs, ys :: [Float]
+      xs = fmap pt_x pts
+      ys = fmap pt_y pts
+
+      square :: Float -> Float
+      square x = x * x
+
+      s_x, s_y, s_xx, s_yy, s_xy :: Float
+      s_x = sum xs
+      s_y = sum ys
+      s_xx = sum $ square <$> xs
+      s_yy = sum $ square <$> ys
+      s_xy = sum $ (\(Pt x y) -> x * y) <$> pts
+
+      theta_1 = (nf * s_xy - s_x * s_y) / (nf * s_xx - s_x * s_x)
+      theta_0 = (1 / nf) * s_y - theta_1 * (1 / nf) * s_x
+   in Line theta_0 theta_1
 
 ---- Generation of example points for linear fitting --------------------------
 
