@@ -340,17 +340,22 @@ lossLandscapeAnimation out_dir batch_size lr = do
           ls = (\(_, _, x) -> x) <$> take (index + 1) batch_and_outcome
 
           plot =
+            -- background loss landscape
             Plt.imshow tabulated_loss_landscape
               @@ [ Plt.o2 "extent" extent,
                    Plt.o2 "origin" "lower",
                    Plt.o2 "aspect" "auto",
                    Plt.o2 "interpolation" "bilinear"
                  ]
+              -- phase-space dashed line
               % Plt.plot (theta_0 <$> ls) (theta_1 <$> ls)
                 @@ [ Plt.o2 "ls" "--",
                      Plt.o2 "color" "orange"
                    ]
+              -- phase space points
               % Plt.scatter (theta_0 <$> ls) (theta_1 <$> ls)
+                @@ [ Plt.o2 "color" "darkorchid" ]
+              -- point for the least-squares solution
               % Plt.scatter [theta_0 llsq] [theta_1 llsq]
                 @@ [ Plt.o2 "color" "red",
                      Plt.o2 "marker" "x"
