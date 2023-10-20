@@ -6,21 +6,13 @@
 {-# LANGUAGE TypeOperators #-}
 
 module LinearFit
-  ( -- * Types
-    Pt (Pt, pt_x, pt_y),
-    Line (Line, theta_0, theta_1),
-    Batch,
-    Example (Example),
-
-    -- * Functions
-    defaultLinFitPts,
-    fit,
+  ( -- * Functions
     linearFittingAnimation,
-    linfitLossFn,
+    lossLandscapeAnimation,
   )
 where
 
-import Control.Exception (assert)
+import Control.Exception (Exception (displayException), assert)
 import Control.Monad (forM_)
 import Data.Bifunctor (second)
 import Data.List.Split (chunksOf)
@@ -29,7 +21,7 @@ import Data.VectorSpace (AdditiveGroup (zeroV), Scalar, VectorSpace, (*^), (^+^)
 import GHC.Generics (Generic)
 import Graphics.Matplotlib ((%), (@@))
 import qualified Graphics.Matplotlib as Plt
-import Path (Abs, Dir, Path, (</>))
+import Path (Abs, Dir, File, Path, Rel, (</>))
 import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
 import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
@@ -41,6 +33,10 @@ data Pt = Pt
   { pt_x :: Float,
     pt_y :: Float
   }
+
+-- | Convert a `Pt` to an `Example`.
+pt_to_example :: Pt -> Example Float Float
+pt_to_example (Pt x y) = Example x y
 
 -- | Parameters of the equation for a straight line.
 --
@@ -200,9 +196,7 @@ linearFittingAnimation out_dir max_frames batch_size r = do
 
       lin_fit_examples :: [Example Float Float]
       lin_fit_examples =
-        concat $
-          replicate n_epochs $
-            fmap (\(Pt x y) -> Example x y) defaultLinFitPts
+        concat $ replicate n_epochs $ fmap pt_to_example defaultLinFitPts
 
       training_examples :: [Example Float Float]
       training_examples = concat $ replicate 6 lin_fit_examples
@@ -219,8 +213,7 @@ linearFittingAnimation out_dir max_frames batch_size r = do
           <$> zip (Nothing : fmap Just batches) fits
    in forM_ (zip [0 .. (max_frames - 1)] batch_and_outcome) $
         \(index :: Int, (maybe_batch, _loss, line)) -> do
-          filename <- Path.parseRelFile (printf "%0*d.png" (4 :: Int) index)
-          let outfile = out_dir </> filename
+          let outfile = out_dir </> relFileNum 4 index ".png"
 
               batch_examples :: [Example Float Float]
               batch_examples = fromMaybe [] maybe_batch
@@ -253,6 +246,120 @@ linearFittingAnimation out_dir max_frames batch_size r = do
                   % Plt.ylim @Double @Double -4 13
           putStrLn $ "Rendering file: " <> Path.toFilePath outfile
           Plt.file (Path.toFilePath outfile) plot
+
+lossLandscapeAnimation ::
+  Path Abs Dir ->
+  -- | Batch size to use.
+  Int ->
+  -- | Learning rate.
+  Float ->
+  -- | IO action to create the animation.
+  IO ()
+lossLandscapeAnimation out_dir batch_size lr = do
+  let outfile = out_dir </> relFileNum 4 0 ".png"
+
+      -- Training trajectory
+
+      init_line = Line 10 -1.2
+      n_epochs = 2 :: Int
+
+      llsq :: Line
+      llsq = lsqFit defaultLinFitPts
+
+      lin_fit_examples :: [Example Float Float]
+      lin_fit_examples =
+        concat $ replicate n_epochs $ fmap pt_to_example defaultLinFitPts
+
+      training_examples :: [Example Float Float]
+      training_examples = concat $ replicate 6 lin_fit_examples
+
+      batches :: [Batch Float Float]
+      batches = chunksOf batch_size training_examples
+
+      fits :: [(Float, Line)]
+      fits = fit lr linfitLossFn batches init_line
+
+      fit_xs, fit_ys :: [Float]
+      fit_xs = theta_0 . snd <$> fits
+      fit_ys = theta_1 . snd <$> fits
+
+      -- Loss landscape background
+
+      all_pts :: [Example Float Float]
+      all_pts = fmap pt_to_example defaultLinFitPts
+
+      loss_landscape :: Line -> Float
+      loss_landscape = fst . linfitLossFn all_pts
+
+      theta0_min = 4.0 :: Float
+      theta0_max = 11.0 :: Float
+      theta1_min = -1.5 :: Float
+      theta1_max = 2.0 :: Float
+
+      extent :: [Double]
+      extent = fmap realToFrac [theta0_min, theta0_max, theta1_min, theta1_max]
+
+      tabulated_loss_landscape :: [[Float]]
+      tabulated_loss_landscape =
+        let n_theta0 = 50 :: Int
+            n_theta1 = 50 :: Int
+
+            j_to_theta0 :: Int -> Float
+            j_to_theta0 j =
+              theta0_min
+                + (fromIntegral j / fromIntegral (n_theta0 - 1))
+                  * (theta0_max - theta0_min)
+
+            i_to_theta1 :: Int -> Float
+            i_to_theta1 i =
+              theta1_min
+                + (fromIntegral i / fromIntegral (n_theta1 - 1))
+                  * (theta1_max - theta1_min)
+
+            lossij :: Int -> Int -> Float
+            lossij i j = loss_landscape (Line (j_to_theta0 j) (i_to_theta1 i))
+         in [[lossij i j | j <- [0 .. n_theta1]] | i <- [0 .. n_theta0]]
+
+      plot :: Plt.Matplotlib
+      plot =
+        Plt.imshow tabulated_loss_landscape
+          @@ [ Plt.o2 "extent" extent,
+               Plt.o2 "origin" "lower",
+               Plt.o2 "aspect" "auto",
+               Plt.o2 "interpolation" "bilinear"
+             ]
+          % Plt.scatter fit_xs fit_ys
+          % Plt.scatter [theta_0 llsq] [theta_1 llsq]
+            @@ [ Plt.o2 "color" "red",
+                 Plt.o2 "marker" "x"
+               ]
+
+  _ <- Plt.file (Path.toFilePath outfile) plot
+  pure ()
+
+-- | Construct a numbered relative file.
+--
+-- eg:
+-- >>> relFileNum 5 42 ".png"
+-- "00042.png"
+relFileNum ::
+  -- Width of numeric part of the file name.
+  Int ->
+  -- Number of the file name.
+  Int ->
+  -- Extension of the filename (including the dot).
+  String ->
+  -- Relative path to a file.
+  Path Rel File
+relFileNum width n ext = relFile $ printf ("%0*d" <> ext) width n
+
+-- | Construct a relative file, throwing a runtime error if that is not
+--   possible.
+relFile :: String -> Path Rel File
+relFile name =
+  case Path.parseRelFile name of
+    Right prf -> prf
+    Left ex -> error (displayException ex)
 
 ---- Closed-form least-squares linear fitting ---------------------------------
 
