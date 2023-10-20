@@ -1,1 +1,14 @@
+.DS_Store
 **/dist-newstyle/**
+**/__pycache__/**
+oc-nn-haskell/plots
+slides/*.aux
+slides/*.fdb_latexmk
+slides/*.fls
+slides/*.log
+slides/*.nav
+slides/*.out
+slides/*.pdf
+slides/*.snm
+slides/*.synctex.gz
+slides/*.toc
