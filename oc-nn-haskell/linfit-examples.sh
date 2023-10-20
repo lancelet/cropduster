@@ -9,7 +9,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PLOT_DIR="${SCRIPT_DIR}/plots"
 
 # Generate all examples
-# cabal run linfit-examples -- --dir="$PLOT_DIR"
+cabal run linfit-examples -- --dir="$PLOT_DIR"
 
 # Encode linfit-bs1.webm
 ffmpeg \
