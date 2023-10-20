@@ -17,7 +17,15 @@ import Control.Monad (forM_)
 import Data.Bifunctor (second)
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromMaybe)
-import Data.VectorSpace (AdditiveGroup (zeroV), Scalar, VectorSpace, (*^), (^+^), (^-^), (^/))
+import Data.VectorSpace
+  ( AdditiveGroup (zeroV),
+    Scalar,
+    VectorSpace,
+    (*^),
+    (^+^),
+    (^-^),
+    (^/),
+  )
 import GHC.Generics (Generic)
 import Graphics.Matplotlib ((%), (@@))
 import qualified Graphics.Matplotlib as Plt
@@ -35,8 +43,8 @@ data Pt = Pt
   }
 
 -- | Convert a `Pt` to an `Example`.
-pt_to_example :: Pt -> Example Float Float
-pt_to_example (Pt x y) = Example x y
+ptToExample :: Pt -> Example Float Float
+ptToExample (Pt x y) = Example x y
 
 -- | Parameters of the equation for a straight line.
 --
@@ -168,6 +176,36 @@ mean xs = go 0 zeroV xs
 
 ---- Animated sequence generation ---------------------------------------------
 
+-- | Perform a linear fit for animation.
+--
+-- The output from this function produces a list of tuples containing the
+-- batch used for a training step along with
+fitForAnimation ::
+  -- | Number of epochs to train.
+  Int ->
+  -- | Batch size.
+  Int ->
+  -- | Learning rate.
+  Float ->
+  -- | List of tuples of the batch used, and the loss and parameters it
+  --   produced.
+  [(Maybe (Batch Float Float), Float, Line)]
+fitForAnimation n_epochs batch_size lr =
+  let init_line = Line 10 -1.2
+
+      dataset :: [Example Float Float]
+      dataset = concat $ replicate n_epochs $ ptToExample <$> defaultLinFitPts
+
+      batches :: [Batch Float Float]
+      batches = chunksOf batch_size dataset
+
+      fits :: [(Float, Line)]
+      fits = fit lr linfitLossFn batches init_line
+
+      convert :: (m, (l, t)) -> (m, l, t)
+      convert (m, (l, t)) = (m, l, t)
+   in convert <$> zip (Nothing : (Just <$> batches)) fits
+
 -- | Produce an animation of linear fitting for demonstration purposes.
 --
 -- This calls matplotlib, outputting individual PNG files showing the
@@ -186,31 +224,17 @@ linearFittingAnimation ::
   Float ->
   -- | IO action to create the animation.
   IO ()
-linearFittingAnimation out_dir max_frames batch_size r = do
-  let init_line = Line 10 -1.2
+linearFittingAnimation out_dir max_frames batch_size lr = do
+  let n_epochs = 4 :: Int
 
-      n_epochs = 4 :: Int
+      lin_fit_examples :: [Example Float Float]
+      lin_fit_examples = ptToExample <$> defaultLinFitPts
+
+      batch_and_outcome :: [(Maybe (Batch Float Float), Float, Line)]
+      batch_and_outcome = fitForAnimation n_epochs batch_size lr
 
       llsq :: Line
       llsq = lsqFit defaultLinFitPts
-
-      lin_fit_examples :: [Example Float Float]
-      lin_fit_examples =
-        concat $ replicate n_epochs $ fmap pt_to_example defaultLinFitPts
-
-      training_examples :: [Example Float Float]
-      training_examples = concat $ replicate 6 lin_fit_examples
-
-      batches :: [Batch Float Float]
-      batches = chunksOf batch_size training_examples
-
-      fits :: [(Float, Line)]
-      fits = fit r linfitLossFn batches init_line
-
-      batch_and_outcome :: [(Maybe (Batch Float Float), Float, Line)]
-      batch_and_outcome =
-        (\(m, (l, t)) -> (m, l, t))
-          <$> zip (Nothing : fmap Just batches) fits
    in forM_ (zip [0 .. (max_frames - 1)] batch_and_outcome) $
         \(index :: Int, (maybe_batch, _loss, line)) -> do
           let outfile = out_dir </> relFileNum 4 index ".png"
@@ -247,6 +271,11 @@ linearFittingAnimation out_dir max_frames batch_size r = do
           putStrLn $ "Rendering file: " <> Path.toFilePath outfile
           Plt.file (Path.toFilePath outfile) plot
 
+-- | Produce an animation of the loss landscape during linear fitting for
+--   demonstration purposes.
+--
+-- This calls matplotlib, outputting individual PNG files showing the
+-- progress of linear fitting via SGD.
 lossLandscapeAnimation ::
   Path Abs Dir ->
   -- | Batch size to use.
@@ -256,37 +285,20 @@ lossLandscapeAnimation ::
   -- | IO action to create the animation.
   IO ()
 lossLandscapeAnimation out_dir batch_size lr = do
-  let outfile = out_dir </> relFileNum 4 0 ".png"
+  let -- Training trajectory
 
-      -- Training trajectory
+      n_epochs = 12 :: Int
 
-      init_line = Line 10 -1.2
-      n_epochs = 2 :: Int
+      batch_and_outcome :: [(Maybe (Batch Float Float), Float, Line)]
+      batch_and_outcome = fitForAnimation n_epochs batch_size lr
 
       llsq :: Line
       llsq = lsqFit defaultLinFitPts
 
-      lin_fit_examples :: [Example Float Float]
-      lin_fit_examples =
-        concat $ replicate n_epochs $ fmap pt_to_example defaultLinFitPts
-
-      training_examples :: [Example Float Float]
-      training_examples = concat $ replicate 6 lin_fit_examples
-
-      batches :: [Batch Float Float]
-      batches = chunksOf batch_size training_examples
-
-      fits :: [(Float, Line)]
-      fits = fit lr linfitLossFn batches init_line
-
-      fit_xs, fit_ys :: [Float]
-      fit_xs = theta_0 . snd <$> fits
-      fit_ys = theta_1 . snd <$> fits
-
       -- Loss landscape background
 
       all_pts :: [Example Float Float]
-      all_pts = fmap pt_to_example defaultLinFitPts
+      all_pts = fmap ptToExample defaultLinFitPts
 
       loss_landscape :: Line -> Float
       loss_landscape = fst . linfitLossFn all_pts
@@ -320,22 +332,33 @@ lossLandscapeAnimation out_dir batch_size lr = do
             lossij i j = loss_landscape (Line (j_to_theta0 j) (i_to_theta1 i))
          in [[lossij i j | j <- [0 .. n_theta1]] | i <- [0 .. n_theta0]]
 
-      plot :: Plt.Matplotlib
-      plot =
-        Plt.imshow tabulated_loss_landscape
-          @@ [ Plt.o2 "extent" extent,
-               Plt.o2 "origin" "lower",
-               Plt.o2 "aspect" "auto",
-               Plt.o2 "interpolation" "bilinear"
-             ]
-          % Plt.scatter fit_xs fit_ys
-          % Plt.scatter [theta_0 llsq] [theta_1 llsq]
-            @@ [ Plt.o2 "color" "red",
-                 Plt.o2 "marker" "x"
-               ]
+  forM_ (zip [0 ..] batch_and_outcome) $
+    \(index :: Int, _) -> do
+      let outfile = out_dir </> relFileNum 4 index ".png"
 
-  _ <- Plt.file (Path.toFilePath outfile) plot
-  pure ()
+          ls :: [Line]
+          ls = (\(_, _, x) -> x) <$> take (index + 1) batch_and_outcome
+
+          plot =
+            Plt.imshow tabulated_loss_landscape
+              @@ [ Plt.o2 "extent" extent,
+                   Plt.o2 "origin" "lower",
+                   Plt.o2 "aspect" "auto",
+                   Plt.o2 "interpolation" "bilinear"
+                 ]
+              % Plt.plot (theta_0 <$> ls) (theta_1 <$> ls)
+                @@ [ Plt.o2 "ls" "--",
+                     Plt.o2 "color" "orange"
+                   ]
+              % Plt.scatter (theta_0 <$> ls) (theta_1 <$> ls)
+              % Plt.scatter [theta_0 llsq] [theta_1 llsq]
+                @@ [ Plt.o2 "color" "red",
+                     Plt.o2 "marker" "x"
+                   ]
+              % Plt.xlabel "y-intercept"
+              % Plt.ylabel "slope"
+      putStrLn $ "Rendering file: " <> Path.toFilePath outfile
+      Plt.file (Path.toFilePath outfile) plot
 
 -- | Construct a numbered relative file.
 --
