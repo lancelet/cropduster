@@ -3,7 +3,7 @@
 
 module Main where
 
-import LinearFit (linearFittingAnimation, lossLandscapeAnimation)
+import Duster.LinearFit (linearFittingAnimation, lossLandscapeAnimation)
 import Options.Applicative (Parser)
 import qualified Options.Applicative as OA
 import Path (Abs, Dir, Path, reldir, (</>))

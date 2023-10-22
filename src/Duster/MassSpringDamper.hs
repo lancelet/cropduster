@@ -10,7 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
-module MassSpringDamper where
+module Duster.MassSpringDamper where
 
 import Data.VectorSpace
   ( AdditiveGroup (negateV, zeroV, (^+^), (^-^)),
@@ -45,7 +45,7 @@ import Numeric.LinearAlgebra.Static.Backprop
     matrix,
     (#>),
   )
-import ODE (Grad (Grad), odeIntRK4, termt)
+import Duster.ODE (Grad (Grad), odeIntRK4, termt)
 
 type State = R 2
 

@@ -5,7 +5,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
-module LinearFit
+module Duster.LinearFit
   ( -- * Functions
     linearFittingAnimation,
     lossLandscapeAnimation,
