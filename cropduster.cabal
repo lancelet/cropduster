@@ -19,6 +19,7 @@ library
     Duster.LinearFit
     Duster.MassSpringDamper
     Duster.ODE
+    Duster.Orphans
 
   build-depends:
     , backprop          ^>=0.2.6.5

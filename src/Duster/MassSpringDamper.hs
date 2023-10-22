@@ -1,25 +1,15 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE TypeFamilies #-}
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Duster.MassSpringDamper where
 
-import Data.VectorSpace
-  ( AdditiveGroup (negateV, zeroV, (^+^), (^-^)),
-    InnerSpace,
-    VectorSpace (Scalar, (*^)),
-    (<.>),
-  )
+import Duster.ODE (Grad (Grad), odeIntRK4, termt)
+import Duster.Orphans ()
 import GHC.Generics (Generic)
-import GHC.TypeLits (KnownNat)
 import qualified Graphics.Matplotlib as Plt
 import Lens.Micro.TH (makeLenses)
 import Numeric.Backprop
@@ -30,74 +20,19 @@ import Numeric.Backprop
     auto,
     collectVar,
     evalBP,
-    liftOp1,
-    liftOp2,
-    op1,
-    op2,
     (^^.),
     pattern T2,
   )
 import Numeric.LinearAlgebra ((!))
-import Numeric.LinearAlgebra.Static (Sized (extract), dot, fromList, konst)
+import Numeric.LinearAlgebra.Static (Sized (extract), fromList)
 import Numeric.LinearAlgebra.Static.Backprop
   ( L,
     R,
     matrix,
     (#>),
   )
-import Duster.ODE (Grad (Grad), odeIntRK4, termt)
 
 type State = R 2
-
----- AdditiveGroup, VectorSpace and InnerSpace for R n ------------------------
-
-instance AdditiveGroup (R n) where
-  zeroV = 0
-  (^+^) = (+)
-  negateV = negate
-  (^-^) = (-)
-
-instance (KnownNat n) => VectorSpace (R n) where
-  type Scalar (R n) = Double
-  c *^ x = konst c * x
-
-instance (KnownNat n) => InnerSpace (R n) where
-  (<.>) = dot
-
----- AdditiveGroup and VectorSpace for BVar s a -------------------------------
-
-instance
-  (AdditiveGroup a, Backprop a, Reifies s W) =>
-  AdditiveGroup (BVar s a)
-  where
-  zeroV = auto zeroV
-  (^+^) = liftOp2 (op2 elementWiseAdd)
-    where
-      elementWiseAdd :: a -> a -> (a, a -> (a, a))
-      elementWiseAdd x y = (x ^+^ y, \dl -> (dl, dl))
-  negateV = liftOp1 (op1 elementWiseNegation)
-    where
-      elementWiseNegation :: a -> (a, a -> a)
-      elementWiseNegation x = (x, negateV)
-  (^-^) = liftOp2 (op2 elementWiseSub)
-    where
-      elementWiseSub :: a -> a -> (a, a -> (a, a))
-      elementWiseSub x y = (x ^-^ y, \dl -> (dl, negateV dl))
-
-instance
-  ( VectorSpace a,
-    InnerSpace a,
-    Backprop a,
-    Backprop (Scalar a),
-    Reifies s W
-  ) =>
-  VectorSpace (BVar s a)
-  where
-  type Scalar (BVar s a) = BVar s (Scalar a)
-  (*^) = liftOp2 (op2 scalarMul)
-    where
-      scalarMul :: Scalar a -> a -> (a, a -> (Scalar a, a))
-      scalarMul s x = (s *^ x, \dl -> (dl <.> x, s *^ dl))
 
 data Param = Param
   { _param_m :: Double,
@@ -127,8 +62,8 @@ gradFn ps _t state = Grad $ mm #> state
     mm :: BVar s (L 2 2)
     mm = matrix [0, 1, -k / m, -c / m]
 
-integ :: IO ()
-integ = do
+integ1 :: IO ()
+integ1 = do
   let s0 :: R 2
       s0 = fromList [1, 0]
 

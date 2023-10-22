@@ -1,7 +1,7 @@
 .DS_Store
 **/dist-newstyle/**
 **/__pycache__/**
-oc-nn-haskell/plots
+plots
 slides/*.aux
 slides/*.fdb_latexmk
 slides/*.fls
