@@ -1,5 +1,6 @@
 baseURL = 'https://lancelet.github.io/cropduster'
 languageCode = 'en-us'
 title = 'CropDuster - Neural Optimal Control Demo in Haskell'
+staticDir = ['static']
 [[module.imports]]
 path = "github.com/imfing/hextra"
