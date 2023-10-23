@@ -6,21 +6,21 @@ draft = false
 
 {{< rawhtml >}}
 <video width=100% controls autoplay>
-    <source src="/video/linfit-bs1.webm" type="video/webm">
+    <source src="video/linfit-bs1.webm" type="video/webm">
     Your browser does not support the video tag.
 </video>
 {{< /rawhtml >}}
 
 {{< rawhtml >}}
 <video width=100% controls autoplay>
-    <source src="/video/loss-landscape.webm" type="video/webm">
+    <source src="video/loss-landscape.webm" type="video/webm">
     Your browser does not support the video tag.
 </video>
 {{< /rawhtml >}}
 
 {{< rawhtml >}}
 <video width=100% controls autoplay>
-    <source src="/video/msd-fit.webm" type="video/webm">
+    <source src="video/msd-fit.webm" type="video/webm">
     Your browser does not support the video tag.
 </video>
 {{< /rawhtml >}}
