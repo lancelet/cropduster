@@ -32,11 +32,9 @@ jobs:
     - name: Cache
       uses: actions/cache@v3
       env:
-        cache-name: cache-bits
+        cache-name: cache-cabal
       with:
-        path: |
-          ~/.cabal
-          ~/.venv
+        path: ~/.cabal
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
         restore-keys: |
           ${{ runner.os }}-build-${{ env.cache-name }}-

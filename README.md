@@ -2,6 +2,9 @@
 
 [![CI Build](https://github.com/lancelet/cropduster/actions/workflows/haskell.yml/badge.svg)](https://github.com/lancelet/cropduster/actions/workflows/haskell.yml)
 
+The GitHub Pages site for this repository is at
+[https://lancelet.github.io/cropduster](https://lancelet.github.io/cropduster)
+
 WIP!
 
 This is a repository containing work for a planned presentation to FP-Syd

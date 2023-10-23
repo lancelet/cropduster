@@ -1,4 +1,4 @@
-baseURL = 'https://example.org/'
+baseURL = 'https://lancelet.github.io/cropduster'
 languageCode = 'en-us'
 title = 'CropDuster - Neural Optimal Control Demo in Haskell'
 [[module.imports]]
