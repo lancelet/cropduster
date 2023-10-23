@@ -1,5 +1,8 @@
 # Optimal Control with Neural Networks
 
+![CI Build]
+(https://github.com/lancelet/cropduster/actions/workflows/haskell.yml/badge.svg)
+
 WIP!
 
 This is a repository containing work for a planned presentation to FP-Syd
