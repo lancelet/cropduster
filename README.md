@@ -45,14 +45,11 @@ Major items
 To generate linear fitting example movies:
 
 ```
-$ pushd oc-nn-haskell
-$ ./linfit-examples.sh
-$ popd
-$ ls oc-nn-haskell/plots
+$ ./linfit-examples.sh  # generates movies under the plots directory
 ```
 
 To generate mass-spring-damper example movies:
 
 ```
-# TODO
+$ ./msd-examples.sh  # generates movies under the plots directory
 ```
