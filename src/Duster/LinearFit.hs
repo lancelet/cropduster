@@ -9,6 +9,7 @@ module Duster.LinearFit
   ( -- * Functions
     linearFittingAnimation,
     lossLandscapeAnimation,
+    relFileNum
   )
 where
 
