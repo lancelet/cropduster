@@ -8,6 +8,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 jobs:
   build:
@@ -30,7 +32,7 @@ jobs:
     - name: Cache
       uses: actions/cache@v3
       env:
-        cache-name: cache-cabal
+        cache-name: cache-bits
       with:
         path: |
           ~/.cabal
