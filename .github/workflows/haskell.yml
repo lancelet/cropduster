@@ -43,7 +43,7 @@ jobs:
       run: cabal test all
     - name: Run video generation
       run: |
-        sudo pip install matplotlib
+        sudo pip install scipy matplotlib
         sudo apt-get install -y ffmpeg
         ./linfit-examples.sh
         ./msd-examples.sh
