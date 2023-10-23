@@ -42,6 +42,8 @@ Major items
 - [x] Run compiling and plotting in GitHub CI.
 - [ ] Trial Haskell chart to see if it has better plotting performance.
 - [ ] Trial video.js in place of plain HTML video tags.
+- [ ] Generate slides using Pandoc and reveal.js.
+- [ ] Figure out how to include reveal.js presentation in the Hugo output.
 - [ ] Tidy spring-damper example; add noise to data; make mass a
       constant since only spring and damping constants are truly free
       parameters.
