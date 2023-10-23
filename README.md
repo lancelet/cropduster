@@ -1,6 +1,6 @@
 # Optimal Control with Neural Networks
 
-![CI Build](https://github.com/lancelet/cropduster/actions/workflows/haskell.yml/badge.svg)
+[![CI Build](https://github.com/lancelet/cropduster/actions/workflows/haskell.yml/badge.svg)](https://github.com/lancelet/cropduster/actions/workflows/haskell.yml)
 
 WIP!
 
