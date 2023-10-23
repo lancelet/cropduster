@@ -40,6 +40,8 @@ Major items
 - [x] Implement RK4 for backprop.
 - [x] Fit parameters to a mass-spring-damper system using backprop.
 - [x] Run compiling and plotting in GitHub CI.
+- [ ] Trial Haskell chart to see if it has better plotting performance.
+- [ ] Trial video.js in place of plain HTML video tags.
 - [ ] Tidy spring-damper example; add noise to data; make mass a
       constant since only spring and damping constants are truly free
       parameters.
