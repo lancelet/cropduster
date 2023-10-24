@@ -4,6 +4,7 @@
 module Main where
 
 import Duster.LinearFit (linearFittingAnimation, lossLandscapeAnimation)
+import Duster.Log (createLogger)
 import Options.Applicative (Parser)
 import qualified Options.Applicative as OA
 import Path (Abs, Dir, Path, reldir, (</>))
@@ -23,13 +24,17 @@ main = generatePlots =<< OA.execParser opts
 -- | Entry point for app - generate plots.
 generatePlots :: Args -> IO ()
 generatePlots args = do
+  -- Thread-safe logger. We want just one instance of this because it locks
+  -- to write a message.
+  logger <- createLogger
+
   -- Directory to output plots
   plotDir :: Path Abs Dir <- resolveDir' (plots_dir args)
 
   -- Plot linear fit (batch size of 1)
   let dir_linfit_bs1 = plotDir </> [reldir|linfit-bs1|]
   ensureDir dir_linfit_bs1
-  linearFittingAnimation dir_linfit_bs1 120 1 2e-2
+  linearFittingAnimation logger dir_linfit_bs1 120 1 2e-2
 
   -- Plot loss landscape (batch size of 4)
   let dir_loss_landscape = plotDir </> [reldir|loss-landscape|]
