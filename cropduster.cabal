@@ -28,6 +28,7 @@ library
     , base                 ^>=4.17.2.0
     , bytestring           ^>=0.11.5.2
     , Chart                ^>=1.9.5
+    , Chart-cairo          ^>=1.9.4.1
     , Chart-diagrams       ^>=1.9.5.1
     , colour               ^>=2.3.6
     , data-default         ^>=0.7.1.1

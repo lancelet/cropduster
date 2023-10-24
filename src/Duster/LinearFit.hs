@@ -17,8 +17,8 @@ import Control.Concurrent.PooledIO.Independent (run)
 import Control.Exception (Exception (displayException), assert)
 import Control.Monad (forM_)
 import Data.Bifunctor (second)
-import Data.Colour (opaque)
-import Data.Colour.Names (black, blue, grey, red)
+import Data.Colour (opaque, transparent)
+import Data.Colour.Names (black, blue, grey, red, white)
 import Data.Functor ((<&>))
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromMaybe)
@@ -37,8 +37,9 @@ import GHC.Generics (Generic)
 import Graphics.Matplotlib ((%), (@@))
 import qualified Graphics.Matplotlib as Plt
 import qualified Graphics.Rendering.Chart as C
-import Graphics.Rendering.Chart.Easy (def)
-import Lens.Micro ((.~))
+import Graphics.Rendering.Chart.Backend.Cairo (FileFormat (PNG), FileOptions (FileOptions), renderableToFile)
+import Graphics.Rendering.Chart.Easy (def, (%=))
+import Lens.Micro ((%~), (.~), (?~))
 import Path (Abs, Dir, File, Path, Rel, (</>))
 import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
@@ -317,25 +318,27 @@ renderLinearFittingAnimationFrame
         fit_line =
           C.plot_lines_values .~ [fit_line_tuples] $
             C.plot_lines_style . C.line_color .~ opaque black $
-              def
+              C.plot_lines_style . C.line_width .~ 1.5 $
+                def
 
         lsq_line :: C.PlotLines Float Float
         lsq_line =
           C.plot_lines_values .~ [lsq_line_tuples] $
             C.plot_lines_style . C.line_color .~ opaque grey $
               C.plot_lines_style . C.line_dashes .~ [4, 4] $
-                def
+                C.plot_lines_style . C.line_width .~ 1.5 $
+                  def
 
         bg_scatter :: C.PlotPoints Float Float
         bg_scatter =
           C.plot_points_values .~ bg_tuples $
-            C.plot_points_style .~ C.filledCircles 2 (opaque blue) $
+            C.plot_points_style .~ C.filledCircles 3 (opaque blue) $
               def
 
         batch_scatter :: C.PlotPoints Float Float
         batch_scatter =
           C.plot_points_values .~ batch_tuples $
-            C.plot_points_style .~ C.filledCircles 4 (opaque red) $
+            C.plot_points_style .~ C.filledCircles 6 (opaque red) $
               def
 
         layout :: C.Layout Float Float
@@ -348,19 +351,27 @@ renderLinearFittingAnimationFrame
               .~ C.scaledAxis
                 def
                 (y_min, y_max)
+            $ C.layout_x_axis . C.laxis_title .~ "input"
+            $ C.layout_y_axis . C.laxis_title .~ "output"
+            $ C.layout_all_font_styles . C.font_size %~ (* 1.5)
             $ C.layout_plots
               .~ [ C.toPlot lsq_line,
                    C.toPlot bg_scatter,
                    C.toPlot batch_scatter,
                    C.toPlot fit_line
                  ]
+            $ C.layout_plot_background ?~ C.FillStyleSolid (opaque white)
+            $ C.layout_background .~ C.FillStyleSolid transparent
             $ def
 
         chart :: C.Renderable ()
         chart = C.toRenderable layout
 
     logString logger $ "Rendering: " <> Path.toFilePath out_file
-    savePngPlot' chart out_file
+    -- savePngPlot' chart out_file
+    let opts = FileOptions (640, 480) PNG
+    _ <- renderableToFile opts (Path.toFilePath out_file) chart
+    pure ()
 
 -- | Produce an animation of the loss landscape during linear fitting for
 --   demonstration purposes.
