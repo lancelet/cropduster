@@ -1,21 +1,25 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE NegativeLiterals #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeOperators #-}
 
 module Duster.LinearFit
   ( -- * Functions
     linearFittingAnimation,
     lossLandscapeAnimation,
-    relFileNum
+    relFileNum,
   )
 where
 
+import Control.Concurrent.PooledIO.Independent (run)
 import Control.Exception (Exception (displayException), assert)
 import Control.Monad (forM_)
 import Data.Bifunctor (second)
+import Data.Colour (opaque)
+import Data.Colour.Names (black, blue, grey, red)
+import Data.Functor ((<&>))
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromMaybe)
 import Data.VectorSpace
@@ -27,9 +31,14 @@ import Data.VectorSpace
     (^-^),
     (^/),
   )
+import Duster.Log (Logger, logString)
+import Duster.Plot (savePngPlot')
 import GHC.Generics (Generic)
 import Graphics.Matplotlib ((%), (@@))
 import qualified Graphics.Matplotlib as Plt
+import qualified Graphics.Rendering.Chart as C
+import Graphics.Rendering.Chart.Easy (def)
+import Lens.Micro ((.~))
 import Path (Abs, Dir, File, Path, Rel, (</>))
 import qualified Path
 import Statistics.Distribution (ContDistr, quantile)
@@ -84,13 +93,9 @@ sgdUpdate ::
 sgdUpdate r theta (Grad dtheta) = theta ^-^ (r *^ dtheta)
 
 -- | Example for supervised training.
-data Example i o = Example
-  { -- | Input value.
-    example_input :: i,
-    -- | Expected result.
-    example_output :: o
-  }
-  deriving (Eq)
+--
+-- @i@ is the input type for the example, @o@ is the output type.
+data Example i o = Example i o deriving (Eq)
 
 -- | Batch of paired inputs and outputs for supervised training.
 type Batch i o = [Example i o]
@@ -212,6 +217,8 @@ fitForAnimation n_epochs batch_size lr =
 -- This calls matplotlib, outputting individual PNG files showing the
 -- progress of linear fitting via SGD.
 linearFittingAnimation ::
+  -- | Thread-safe logger.
+  Logger ->
   -- | Parent directory for output of PNG files. This must exist.
   Path Abs Dir ->
   -- | Maximum number of frames to render.
@@ -225,7 +232,7 @@ linearFittingAnimation ::
   Float ->
   -- | IO action to create the animation.
   IO ()
-linearFittingAnimation out_dir max_frames batch_size lr = do
+linearFittingAnimation logger out_dir max_frames batch_size lr = do
   let n_epochs = 4 :: Int
 
       lin_fit_examples :: [Example Float Float]
@@ -236,41 +243,124 @@ linearFittingAnimation out_dir max_frames batch_size lr = do
 
       llsq :: Line
       llsq = lsqFit defaultLinFitPts
-   in forM_ (zip [0 .. (max_frames - 1)] batch_and_outcome) $
-        \(index :: Int, (maybe_batch, _loss, line)) -> do
-          let outfile = out_dir </> relFileNum 4 index ".png"
 
-              batch_examples :: [Example Float Float]
-              batch_examples = fromMaybe [] maybe_batch
+      -- Actions to render each frame.
+      actions :: [IO ()]
+      actions =
+        zip [0 .. (max_frames - 1)] batch_and_outcome
+          <&> \(index :: Int, (maybe_batch, _loss, line)) ->
+            let outfile = out_dir </> relFileNum 4 index ".png"
+             in renderLinearFittingAnimationFrame
+                  logger
+                  lin_fit_examples
+                  outfile
+                  maybe_batch
+                  llsq
+                  line
 
-              bg_examples :: [Example Float Float]
-              bg_examples = filter (`notElem` batch_examples) lin_fit_examples
+  -- Run actions in parallel.
+  run actions
 
-              xs_bg = fmap example_input bg_examples
-              ys_bg = fmap example_output bg_examples
+renderLinearFittingAnimationFrame ::
+  -- | Thread-safe logger to print what we're doing.
+  Logger ->
+  -- | The linear fitting examples we're training on.
+  [Example Float Float] ->
+  -- | Path to render the frame.
+  Path Abs File ->
+  -- | Batch trained on to produce the current frame fit result (if it exists).
+  Maybe (Batch Float Float) ->
+  -- | Known best-fit line (linear least squares solution).
+  Line ->
+  -- | Current line parameters.
+  Line ->
+  -- | IO action to render the frame.
+  IO ()
+renderLinearFittingAnimationFrame
+  logger
+  lin_fit_examples
+  out_file
+  maybe_batch
+  llsq
+  line = do
+    let batch_examples :: [Example Float Float]
+        batch_examples = fromMaybe [] maybe_batch
 
-              xs_batch = fmap example_input batch_examples
-              ys_batch = fmap example_output batch_examples
+        bg_examples :: [Example Float Float]
+        bg_examples = filter (`notElem` batch_examples) lin_fit_examples
 
-              x_min = -6 :: Float
-              x_max = 6 :: Float
-              plot =
-                Plt.scatter xs_bg ys_bg
-                  % Plt.scatter xs_batch ys_batch
-                    @@ [Plt.o2 "color" "red"]
-                  % Plt.line
-                    [x_min, x_max]
-                    [linear line x_min, linear line x_max]
-                  % Plt.plot
-                    [x_min, x_max]
-                    [linear llsq x_min, linear llsq x_max]
-                    @@ [Plt.o2 "ls" "--"]
-                  % Plt.xlim @Double @Double
-                    (realToFrac x_min)
-                    (realToFrac x_max)
-                  % Plt.ylim @Double @Double -4 13
-          putStrLn $ "Rendering file: " <> Path.toFilePath outfile
-          Plt.file (Path.toFilePath outfile) plot
+        bg_tuples :: [(Float, Float)]
+        bg_tuples = (\(Example !x !y) -> (x, y)) <$> bg_examples
+
+        batch_tuples :: [(Float, Float)]
+        batch_tuples = (\(Example !x !y) -> (x, y)) <$> batch_examples
+
+        x_min, x_max, y_min, y_max :: Float
+        x_min = -7.5
+        x_max = 7.5
+        y_min = -5
+        y_max = 15
+
+        fit_line_tuples :: [(Float, Float)]
+        fit_line_tuples =
+          [ (x_min, linear line x_min),
+            (x_max, linear line x_max)
+          ]
+
+        lsq_line_tuples :: [(Float, Float)]
+        lsq_line_tuples =
+          [ (x_min, linear llsq x_min),
+            (x_max, linear llsq x_max)
+          ]
+
+        fit_line :: C.PlotLines Float Float
+        fit_line =
+          C.plot_lines_values .~ [fit_line_tuples] $
+            C.plot_lines_style . C.line_color .~ opaque black $
+              def
+
+        lsq_line :: C.PlotLines Float Float
+        lsq_line =
+          C.plot_lines_values .~ [lsq_line_tuples] $
+            C.plot_lines_style . C.line_color .~ opaque grey $
+              C.plot_lines_style . C.line_dashes .~ [4, 4] $
+                def
+
+        bg_scatter :: C.PlotPoints Float Float
+        bg_scatter =
+          C.plot_points_values .~ bg_tuples $
+            C.plot_points_style .~ C.filledCircles 2 (opaque blue) $
+              def
+
+        batch_scatter :: C.PlotPoints Float Float
+        batch_scatter =
+          C.plot_points_values .~ batch_tuples $
+            C.plot_points_style .~ C.filledCircles 4 (opaque red) $
+              def
+
+        layout :: C.Layout Float Float
+        layout =
+          C.layout_x_axis . C.laxis_generate
+            .~ C.scaledAxis
+              def
+              (x_min, x_max)
+            $ C.layout_y_axis . C.laxis_generate
+              .~ C.scaledAxis
+                def
+                (y_min, y_max)
+            $ C.layout_plots
+              .~ [ C.toPlot lsq_line,
+                   C.toPlot bg_scatter,
+                   C.toPlot batch_scatter,
+                   C.toPlot fit_line
+                 ]
+            $ def
+
+        chart :: C.Renderable ()
+        chart = C.toRenderable layout
+
+    logString logger $ "Rendering: " <> Path.toFilePath out_file
+    savePngPlot' chart out_file
 
 -- | Produce an animation of the loss landscape during linear fitting for
 --   demonstration purposes.
@@ -355,7 +445,7 @@ lossLandscapeAnimation out_dir batch_size lr = do
                    ]
               -- phase space points
               % Plt.scatter (theta_0 <$> ls) (theta_1 <$> ls)
-                @@ [ Plt.o2 "color" "darkorchid" ]
+                @@ [Plt.o2 "color" "darkorchid"]
               -- point for the least-squares solution
               % Plt.scatter [theta_0 llsq] [theta_1 llsq]
                 @@ [ Plt.o2 "color" "red",
