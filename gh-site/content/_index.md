@@ -6,29 +6,6 @@ draft = false
 
 This is all WIP; please enjoy these videos.
 
-{{< rawhtml >}}
-
-<video width=100% controls autoplay>
-    <source src="video/linfit-bs1.webm" type="video/webm">
-    Your browser does not support the video tag.
-</video>
-
-{{< /rawhtml >}}
-
-{{< rawhtml >}}
-
-<video width=100% controls autoplay>
-    <source src="video/loss-landscape.webm" type="video/webm">
-    Your browser does not support the video tag.
-</video>
-
-{{< /rawhtml >}}
-
-{{< rawhtml >}}
-
-<video width=100% controls autoplay>
-    <source src="video/msd-fit.webm" type="video/webm">
-    Your browser does not support the video tag.
-</video>
-
-{{< /rawhtml >}}
+{{< video mp4="video/linfit-bs1.mp4" >}}
+{{< video mp4="video/loss-landscape.mp4" >}}
+{{< video mp4="video/msd-fit.mp4" >}}

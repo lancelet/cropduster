@@ -22,7 +22,19 @@ ffmpeg \
   -b:v 1M \
   -c:a libvorbis \
   "$PLOT_DIR/msd-fit.webm"
+ffmpeg \
+  -y \
+  -f lavfi -i color=c=white:s=640x480 \
+  -framerate "$FRAMERATE" \
+  -i "$PLOT_DIR/msd-fit/%04d.png" \
+  -shortest \
+  -filter_complex "[0:v][1:v]overlay=shortest=1,format=yuv420p[out]" \
+  -map "[out]" \
+  -vcodec libx264 \
+  -acodec aac \
+  "$PLOT_DIR/msd-fit.mp4"
 
 # Copy video(s) to the Hugo site
 mkdir -p "$HUGO_STATIC_DIR"
 cp "$PLOT_DIR/"*.webm "$HUGO_STATIC_DIR"
+cp "$PLOT_DIR/"*.mp4 "$HUGO_STATIC_DIR/."
