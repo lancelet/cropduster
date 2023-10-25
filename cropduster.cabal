@@ -21,7 +21,6 @@ library
     Duster.MassSpringDamper
     Duster.ODE
     Duster.Orphans
-    Duster.Plot
 
   build-depends:
     , backprop             ^>=0.2.6.5
