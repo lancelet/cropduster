@@ -44,13 +44,14 @@ Major items
 - [x] Trial video.js in place of plain HTML video tags.
 - [x] Generate slides using Pandoc and reveal.js.
 - [x] Clean up `Plot.hs` now I'm using Cairo for plots.
-- [ ] Set up a flow to render images and then process them to videos straight
+- [x] Set up a flow to render images and then process them to videos straight
       from Haskell to avoid crazy bash scripting.
-- [ ] Create other plots using Haskell Chart.
-- [ ] Figure out how to include reveal.js presentation in the Hugo output.
+- [x] Figure out how to include reveal.js presentation in the Hugo output.
 - [ ] Tidy spring-damper example; add noise to data; make mass a
       constant since only spring and damping constants are truly free
       parameters.
+- [ ] Tidy build.
+- [ ] Create other plots using Haskell Chart.
 - [ ] Network for cart-pole pendulum balancing example.
 - [ ] Network for 2D rocket landing example.
 - [ ] Presentation for FP-Syd.
