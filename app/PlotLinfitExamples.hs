@@ -3,12 +3,13 @@
 
 module Main where
 
+import Duster.FFMpeg (Framerate (Framerate), encodeProjectMovies)
 import Duster.LinearFit (linearFittingAnimation, lossLandscapeAnimation)
 import Duster.Log (createLogger)
 import Options.Applicative (Parser)
 import qualified Options.Applicative as OA
-import Path (Abs, Dir, Path, reldir, (</>))
-import Path.IO (ensureDir, resolveDir')
+import Path (Abs, Dir, Path, relfile, (</>))
+import qualified Path.IO
 
 -- | Main entry point for file.
 main :: IO ()
@@ -29,17 +30,20 @@ generatePlots args = do
   logger <- createLogger
 
   -- Directory to output plots
-  plotDir :: Path Abs Dir <- resolveDir' (plots_dir args)
+  plotDir :: Path Abs Dir <- Path.IO.resolveDir' (plots_dir args)
+  Path.IO.ensureDir plotDir
 
   -- Plot linear fit (batch size of 1)
-  let dir_linfit_bs1 = plotDir </> [reldir|linfit-bs1|]
-  ensureDir dir_linfit_bs1
-  linearFittingAnimation logger dir_linfit_bs1 120 1 2e-2
+  let linfit_bs1_file = plotDir </> [relfile|linfit-bs1|]
+  Path.IO.withSystemTempDir "linfit_bs1" $ \images_dir -> do
+    linearFittingAnimation logger images_dir 120 1 2e-2
+    encodeProjectMovies (Framerate 4) images_dir linfit_bs1_file
 
-  -- Plot loss landscape (batch size of 4)
-  let dir_loss_landscape = plotDir </> [reldir|loss-landscape|]
-  ensureDir dir_loss_landscape
-  lossLandscapeAnimation dir_loss_landscape 4 2e-2
+  -- Plot loss landscape animation (batch size of 4)
+  let loss_landscape_file = plotDir </> [relfile|loss-landscape|]
+  Path.IO.withSystemTempDir "loss_landscape" $ \images_dir -> do
+    lossLandscapeAnimation logger images_dir 4 2e-2
+    encodeProjectMovies (Framerate 4) images_dir loss_landscape_file
 
 ---- Option parsing -----------------------------------------------------------
 
@@ -56,5 +60,5 @@ parseArgs =
     <$> OA.strOption
       ( OA.long "dir"
           <> OA.metavar "OUT_DIR"
-          <> OA.help "Output directory"
+          <> OA.help "Movie file output directory"
       )
