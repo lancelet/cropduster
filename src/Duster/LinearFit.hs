@@ -15,10 +15,9 @@ where
 
 import Control.Concurrent.PooledIO.Independent (run)
 import Control.Exception (Exception (displayException), assert)
-import Control.Monad (forM_)
 import Data.Bifunctor (second)
 import Data.Colour (opaque, transparent)
-import Data.Colour.Names (black, blue, grey, red, white)
+import Data.Colour.Names (black, blue, grey, orange, red, white)
 import Data.Functor ((<&>))
 import Data.List.Split (chunksOf)
 import Data.Maybe (fromMaybe)
@@ -33,8 +32,6 @@ import Data.VectorSpace
   )
 import Duster.Log (Logger, logString)
 import GHC.Generics (Generic)
-import Graphics.Matplotlib ((%), (@@))
-import qualified Graphics.Matplotlib as Plt
 import qualified Graphics.Rendering.Chart as C
 import Graphics.Rendering.Chart.Backend.Cairo
   ( FileFormat (PNG),
@@ -248,24 +245,31 @@ linearFittingAnimation logger out_dir max_frames batch_size lr = do
       llsq :: Line
       llsq = lsqFit defaultLinFitPts
 
+      file_names :: [Path Abs File]
+      file_names =
+        zip [0 .. (max_frames - 1)] batch_and_outcome
+          <&> \(index :: Int, _) -> out_dir </> relFileNum 6 index ".png"
+
       -- Actions to render each frame.
       actions :: [IO ()]
       actions =
-        zip [0 .. (max_frames - 1)] batch_and_outcome
-          <&> \(index :: Int, (maybe_batch, _loss, line)) ->
-            let outfile = out_dir </> relFileNum 4 index ".png"
-             in renderLinearFittingAnimationFrame
-                  logger
-                  lin_fit_examples
-                  outfile
-                  maybe_batch
-                  llsq
-                  line
+        zip file_names batch_and_outcome
+          <&> \(outfile, (maybe_batch, _loss, line)) ->
+            renderLinearFittingAnimationFrame
+              logger
+              lin_fit_examples
+              outfile
+              maybe_batch
+              llsq
+              line
 
   -- Run actions in parallel.
   run actions
 
 -- Render a single frame from the linear fitting animation example.
+--
+-- This is intended to be run as a concurrent task, so do not dump text to the
+-- console except via the 'logger'.
 renderLinearFittingAnimationFrame ::
   -- | Thread-safe logger to print what we're doing.
   Logger ->
@@ -372,104 +376,137 @@ renderLinearFittingAnimationFrame
         chart = C.toRenderable layout
 
     logString logger $ "Rendering: " <> Path.toFilePath out_file
-    -- savePngPlot' chart out_file
     let opts = FileOptions (640, 480) PNG
     _ <- renderableToFile opts (Path.toFilePath out_file) chart
     pure ()
 
--- | Produce an animation of the loss landscape during linear fitting for
---   demonstration purposes.
---
--- This calls matplotlib, outputting individual PNG files showing the
--- progress of linear fitting via SGD.
 lossLandscapeAnimation ::
+  Logger ->
   Path Abs Dir ->
-  -- | Batch size to use.
   Int ->
-  -- | Learning rate.
   Float ->
-  -- | IO action to create the animation.
   IO ()
-lossLandscapeAnimation out_dir batch_size lr = do
-  let -- Training trajectory
-
-      n_epochs = 12 :: Int
+lossLandscapeAnimation logger out_dir batch_size lr = do
+  let n_epochs :: Int
+      n_epochs = 12
 
       batch_and_outcome :: [(Maybe (Batch Float Float), Float, Line)]
       batch_and_outcome = fitForAnimation n_epochs batch_size lr
 
+      fit_history :: [Line]
+      fit_history = (\(_, _, line) -> line) <$> batch_and_outcome
+
       llsq :: Line
       llsq = lsqFit defaultLinFitPts
 
-      -- Loss landscape background
+      file_names :: [Path Abs File]
+      file_names =
+        zip [0 ..] batch_and_outcome
+          <&> \(index, _) -> out_dir </> relFileNum 6 index ".png"
 
-      all_pts :: [Example Float Float]
-      all_pts = fmap ptToExample defaultLinFitPts
+      actions :: [IO ()]
+      actions =
+        zip [0 ..] file_names
+          <&> \(index, out_file) ->
+            renderLossLandscapeAnimationFrame
+              logger
+              out_file
+              llsq
+              fit_history
+              index
 
-      loss_landscape :: Line -> Float
-      loss_landscape = fst . linfitLossFn all_pts
+  -- Run rendering actions in parallel.
+  run actions
 
-      theta0_min = 4.0 :: Float
-      theta0_max = 11.0 :: Float
-      theta1_min = -1.5 :: Float
-      theta1_max = 2.0 :: Float
+renderLossLandscapeAnimationFrame ::
+  -- | Thread-safe logger.
+  Logger ->
+  -- | Path to render the frame.
+  Path Abs File ->
+  -- | Known best-fit line (linear least-squares solution).
+  Line ->
+  -- | Phase space points of progressively-better fits.
+  [Line] ->
+  -- | Index of the current fit.
+  Int ->
+  -- | IO action to render the frame.
+  IO ()
+renderLossLandscapeAnimationFrame
+  logger
+  out_file
+  llsq
+  fit_history
+  index = do
+    let trimmed_fit_history :: [Line]
+        trimmed_fit_history = take (index + 1) fit_history
 
-      extent :: [Double]
-      extent = fmap realToFrac [theta0_min, theta0_max, theta1_min, theta1_max]
+        history_tuples :: [(Float, Float)]
+        history_tuples = (\(Line !t0 !t1) -> (t0, t1)) <$> trimmed_fit_history
 
-      tabulated_loss_landscape :: [[Float]]
-      tabulated_loss_landscape =
-        let n_theta0 = 50 :: Int
-            n_theta1 = 50 :: Int
+        t0_min, t0_max, t1_min, t1_max :: Float
+        t0_min = 4
+        t0_max = 11
+        t1_min = -1.5
+        t1_max = 2
 
-            j_to_theta0 :: Int -> Float
-            j_to_theta0 j =
-              theta0_min
-                + (fromIntegral j / fromIntegral (n_theta0 - 1))
-                  * (theta0_max - theta0_min)
+        lsq_point :: [(Float, Float)]
+        lsq_point = [(theta_0 llsq, theta_1 llsq)]
 
-            i_to_theta1 :: Int -> Float
-            i_to_theta1 i =
-              theta1_min
-                + (fromIntegral i / fromIntegral (n_theta1 - 1))
-                  * (theta1_max - theta1_min)
+        history_scatter :: C.PlotPoints Float Float
+        history_scatter =
+          C.plot_points_values .~ history_tuples $
+            C.plot_points_style .~ C.filledCircles 3 (opaque orange) $
+              def
 
-            lossij :: Int -> Int -> Float
-            lossij i j = loss_landscape (Line (j_to_theta0 j) (i_to_theta1 i))
-         in [[lossij i j | j <- [0 .. n_theta1]] | i <- [0 .. n_theta0]]
+        history_line :: C.PlotLines Float Float
+        history_line =
+          C.plot_lines_values .~ [history_tuples] $
+            C.plot_lines_style . C.line_color .~ opaque grey $
+              C.plot_lines_style . C.line_width .~ 1.2 $
+                def
 
-  forM_ (zip [0 ..] batch_and_outcome) $
-    \(index :: Int, _) -> do
-      let outfile = out_dir </> relFileNum 4 index ".png"
+        lsq_scatter :: C.PlotPoints Float Float
+        lsq_scatter =
+          C.plot_points_values .~ lsq_point $
+            C.plot_points_style .~ C.exes 8 2.0 (opaque red) $
+              def
 
-          ls :: [Line]
-          ls = (\(_, _, x) -> x) <$> take (index + 1) batch_and_outcome
+        lsq_label :: C.PlotAnnotation Float Float
+        lsq_label =
+          C.plot_annotation_values
+            .~ [(theta_0 llsq, theta_1 llsq + 0.2, "Least-Squares Solution")]
+            $ C.plot_annotation_style . C.font_color .~ opaque red
+            $ C.plot_annotation_style . C.font_size %~ (* 1.8)
+            $ C.plot_annotation_vanchor .~ C.VTA_Bottom
+            $ C.plot_annotation_hanchor .~ C.HTA_Left
+            $ def
 
-          plot =
-            -- background loss landscape
-            Plt.imshow tabulated_loss_landscape
-              @@ [ Plt.o2 "extent" extent,
-                   Plt.o2 "origin" "lower",
-                   Plt.o2 "aspect" "auto",
-                   Plt.o2 "interpolation" "bilinear"
+        layout :: C.Layout Float Float
+        layout =
+          C.layout_x_axis . C.laxis_generate
+            .~ C.scaledAxis def (t0_min, t0_max)
+            $ C.layout_y_axis . C.laxis_generate
+              .~ C.scaledAxis def (t1_min, t1_max)
+            $ C.layout_x_axis . C.laxis_title .~ "y-intercept"
+            $ C.layout_y_axis . C.laxis_title .~ "slope"
+            $ C.layout_all_font_styles . C.font_size %~ (* 1.5)
+            $ C.layout_plots
+              .~ [ C.toPlot history_line,
+                   C.toPlot history_scatter,
+                   C.toPlot lsq_scatter,
+                   C.toPlot lsq_label
                  ]
-              -- phase-space dashed line
-              % Plt.plot (theta_0 <$> ls) (theta_1 <$> ls)
-                @@ [ Plt.o2 "ls" "--",
-                     Plt.o2 "color" "orange"
-                   ]
-              -- phase space points
-              % Plt.scatter (theta_0 <$> ls) (theta_1 <$> ls)
-                @@ [Plt.o2 "color" "darkorchid"]
-              -- point for the least-squares solution
-              % Plt.scatter [theta_0 llsq] [theta_1 llsq]
-                @@ [ Plt.o2 "color" "red",
-                     Plt.o2 "marker" "x"
-                   ]
-              % Plt.xlabel "y-intercept"
-              % Plt.ylabel "slope"
-      putStrLn $ "Rendering file: " <> Path.toFilePath outfile
-      Plt.file (Path.toFilePath outfile) plot
+            $ C.layout_plot_background ?~ C.FillStyleSolid (opaque white)
+            $ C.layout_background .~ C.FillStyleSolid transparent
+            $ def
+
+        chart :: C.Renderable ()
+        chart = C.toRenderable layout
+
+    logString logger $ "Rendering: " <> Path.toFilePath out_file
+    let opts = FileOptions (640, 480) PNG
+    _ <- renderableToFile opts (Path.toFilePath out_file) chart
+    pure ()
 
 -- | Construct a numbered relative file.
 --
