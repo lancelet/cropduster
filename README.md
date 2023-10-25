@@ -40,9 +40,12 @@ Major items
 - [x] Implement RK4 for backprop.
 - [x] Fit parameters to a mass-spring-damper system using backprop.
 - [x] Run compiling and plotting in GitHub CI.
-- [ ] Trial Haskell chart to see if it has better plotting performance.
-- [ ] Trial video.js in place of plain HTML video tags.
-- [ ] Generate slides using Pandoc and reveal.js.
+- [x] Trial Haskell chart to see if it has better plotting performance.
+- [x] Trial video.js in place of plain HTML video tags.
+- [x] Generate slides using Pandoc and reveal.js.
+- [ ] Clean up `Plot.hs` now I'm using Cairo for plots.
+- [ ] Set up a flow to render images and then process them to videos straight
+      from Haskell to avoid crazy bash scripting.
 - [ ] Figure out how to include reveal.js presentation in the Hugo output.
 - [ ] Tidy spring-damper example; add noise to data; make mass a
       constant since only spring and damping constants are truly free
@@ -50,6 +53,7 @@ Major items
 - [ ] Network for cart-pole pendulum balancing example.
 - [ ] Network for 2D rocket landing example.
 - [ ] Presentation for FP-Syd.
+- [ ] Try plyr.js instead of video.js.
 
 ## Running
 
