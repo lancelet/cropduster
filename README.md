@@ -43,9 +43,10 @@ Major items
 - [x] Trial Haskell chart to see if it has better plotting performance.
 - [x] Trial video.js in place of plain HTML video tags.
 - [x] Generate slides using Pandoc and reveal.js.
-- [ ] Clean up `Plot.hs` now I'm using Cairo for plots.
+- [x] Clean up `Plot.hs` now I'm using Cairo for plots.
 - [ ] Set up a flow to render images and then process them to videos straight
       from Haskell to avoid crazy bash scripting.
+- [ ] Create other plots using Haskell Chart.
 - [ ] Figure out how to include reveal.js presentation in the Hugo output.
 - [ ] Tidy spring-damper example; add noise to data; make mass a
       constant since only spring and damping constants are truly free

@@ -32,13 +32,16 @@ import Data.VectorSpace
     (^/),
   )
 import Duster.Log (Logger, logString)
-import Duster.Plot (savePngPlot')
 import GHC.Generics (Generic)
 import Graphics.Matplotlib ((%), (@@))
 import qualified Graphics.Matplotlib as Plt
 import qualified Graphics.Rendering.Chart as C
-import Graphics.Rendering.Chart.Backend.Cairo (FileFormat (PNG), FileOptions (FileOptions), renderableToFile)
-import Graphics.Rendering.Chart.Easy (def, (%=))
+import Graphics.Rendering.Chart.Backend.Cairo
+  ( FileFormat (PNG),
+    FileOptions (FileOptions),
+    renderableToFile,
+  )
+import Graphics.Rendering.Chart.Easy (def)
 import Lens.Micro ((%~), (.~), (?~))
 import Path (Abs, Dir, File, Path, Rel, (</>))
 import qualified Path
@@ -262,6 +265,7 @@ linearFittingAnimation logger out_dir max_frames batch_size lr = do
   -- Run actions in parallel.
   run actions
 
+-- Render a single frame from the linear fitting animation example.
 renderLinearFittingAnimationFrame ::
   -- | Thread-safe logger to print what we're doing.
   Logger ->
