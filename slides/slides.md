@@ -57,5 +57,3 @@ Left contents
 Right contents
 :::
 ::::::::::::::
-
----

@@ -45,6 +45,14 @@ jobs:
       run: |
         cabal update
         cabal build --only-dependencies --enable-tests --enable-benchmarks
+        sudo apt-get install -y ffmpeg pandoc
+        python -m venv .venv
+        source .venv/bin/activate
+        pip install scipy matplotlib
+        wget -O ${{ runner.temp }}/hugo.deb https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb \
+        && sudo dpkg -i ${{ runner.temp }}/hugo.deb
+        sudo snap install dart-sass
+        [[ -f package-lock.json || -f npm-shrinkwrap.json ]] && npm ci || true
 
     - name: Build
       run: cabal build --enable-tests --enable-benchmarks all
@@ -52,39 +60,24 @@ jobs:
     - name: Run tests
       run: cabal test all
 
-    - name: Install ffmpeg
-      run: sudo apt-get install -y ffmpeg
-
-    - name: Create and activate Python venv
-      run: |
-        python -m venv .venv
-        source .venv/bin/activate
-
-    - name: Install scipy and matplotlib
-      run: |
-        pip install scipy matplotlib
-
     - name: Run video generation
       run: |
+        source .venv/bin/activate
         ./linfit-examples.sh
         ./msd-examples.sh
 
-    - name: Install Hugo CLI
+    - name: Create slides
       run: |
-        wget -O ${{ runner.temp }}/hugo.deb https://github.com/gohugoio/hugo/releases/download/v${HUGO_VERSION}/hugo_extended_${HUGO_VERSION}_linux-amd64.deb \
-        && sudo dpkg -i ${{ runner.temp }}/hugo.deb
-
-    - name: Install Dart Sass
-      run: sudo snap install dart-sass
+        pushd ./slides
+        ./build.sh
+        popd
+        cp ./slides/index.html ./gh-site/static/slides.html
 
     - name: Setup Pages
       id: pages
       uses: actions/configure-pages@v3
 
-    - name: Install Node.js dependencies
-      run: "[[ -f package-lock.json || -f npm-shrinkwrap.json ]] && npm ci || true"
-
-    - name: Build with Hugo
+    - name: Build Hugo site
       env:
         # For maximum backward compatibility with Hugo modules
         HUGO_ENVIRONMENT: production
@@ -96,7 +89,7 @@ jobs:
           --minify \
           --baseURL "${{ steps.pages.outputs.base_url }}/"
 
-    - name: Upload artifact
+    - name: Upload pages artifact
       uses: actions/upload-pages-artifact@v1
       with:
         path: ./gh-site/public
