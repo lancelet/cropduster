@@ -43,6 +43,7 @@ jobs:
 
     - name: Install dependencies
       run: |
+        sudo apt update
         cabal update
         cabal build --only-dependencies --enable-tests --enable-benchmarks
         sudo apt-get install -y ffmpeg pandoc
