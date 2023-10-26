@@ -1,7 +1,7 @@
 ---
 author: Jonathan Merritt
-title: Test
-subtitle: Subtitle
+title: Neural Networks for Optimal Control
+subtitle: A nifty way to steer your rocket...
 date: November 2023
 ---
 

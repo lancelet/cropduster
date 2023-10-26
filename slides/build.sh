@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-pandoc --version
 pandoc \
   -t revealjs \
   -s \
