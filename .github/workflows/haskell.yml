@@ -54,7 +54,7 @@ jobs:
         && sudo dpkg -i ${{ runner.temp }}/hugo.deb
         sudo snap install dart-sass
         [[ -f package-lock.json || -f npm-shrinkwrap.json ]] && npm ci || true
-        curl -O -J https://github.com/jgm/pandoc/releases/download/3.1.8/pandoc-3.1.8-linux-amd64.tar.gz
+        curl -L -O -J https://github.com/jgm/pandoc/releases/download/3.1.8/pandoc-3.1.8-linux-amd64.tar.gz
         sudo tar xvzf pandoc-3.1.8-linux-amd64.tar.gz --strip-components 1 -C /usr/local
         rm pandoc-3.1.8-linux-amd64.tar.gz
 
