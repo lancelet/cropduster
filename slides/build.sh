@@ -7,4 +7,5 @@ pandoc \
   -o index.html \
   slides.md \
   --include-in-header=slides.css \
-  -V theme=solarized
+  -V theme=solarized \
+  -V revealjs-url=https://unpkg.com/reveal.js/
