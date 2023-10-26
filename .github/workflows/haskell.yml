@@ -88,6 +88,7 @@ jobs:
           --gc \
           --minify \
           --baseURL "${{ steps.pages.outputs.base_url }}/"
+        cat public/slides.html
 
     - name: Upload pages artifact
       uses: actions/upload-pages-artifact@v1
