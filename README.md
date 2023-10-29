@@ -70,3 +70,10 @@ To generate mass-spring-damper example movies:
 ```
 $ ./msd-examples.sh  # generates movies under the plots directory
 ```
+
+## `cabal-hoogle` Notes
+
+```
+cabal-hoogle generate
+cabal-hoogle run -- server --local --port 9000
+```

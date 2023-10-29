@@ -9,6 +9,7 @@ module Duster.Orphans where
 
 import qualified Data.VectorSpace as VS
 import GHC.TypeLits (KnownNat)
+import Generics.Deriving (GShow (gshow, gshowList, gshows, gshowsPrec))
 import qualified Numeric.Backprop as B
 import qualified Numeric.LinearAlgebra as LA
 import qualified Numeric.LinearAlgebra.Static as LAS
@@ -45,14 +46,14 @@ instance (KnownNat n, KnownNat m) => VS.AdditiveGroup (LAS.L n m) where
 
 -- VectorSpace for statically-sized vectors.
 instance (KnownNat n) => VS.VectorSpace (LAS.R n) where
-  type Scalar (LAS.R n) = LAS.ℝ
+  type Scalar (LAS.R n) = Double
 
   (*^) :: (KnownNat n) => VS.Scalar (LAS.R n) -> LAS.R n -> LAS.R n
   c *^ x = LAS.konst c * x
 
 -- VectorSpace for statically-sized matrices.
 instance (KnownNat n, KnownNat m) => VS.VectorSpace (LAS.L n m) where
-  type Scalar (LAS.L n m) = LAS.ℝ
+  type Scalar (LAS.L n m) = Double
 
   (*^) ::
     (KnownNat n, KnownNat m) =>
@@ -177,3 +178,17 @@ opScalarMulV ::
   -- | Result of multiplication, and gradient function.
   (a, a -> (c, a))
 opScalarMulV k x = (k VS.*^ x, \dl -> (dl VS.<.> x, k VS.*^ dl))
+
+---- GShow --------------------------------------------------------------------
+
+instance (KnownNat n, KnownNat m) => GShow (LAS.L n m) where
+  gshowsPrec = showsPrec
+  gshows = shows
+  gshow = show
+  gshowList = showList
+
+instance (KnownNat n) => GShow (LAS.R n) where
+  gshowsPrec = showsPrec
+  gshows = shows
+  gshow = show
+  gshowList = showList

@@ -10,7 +10,7 @@ module Duster.ODE
 
     -- * Functions
     odeIntRK4,
-    termt
+    termt,
   )
 where
 

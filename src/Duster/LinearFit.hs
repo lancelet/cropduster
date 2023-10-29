@@ -14,7 +14,7 @@ module Duster.LinearFit
 where
 
 import Control.Concurrent.PooledIO.Independent (run)
-import Control.Exception (Exception (displayException), assert)
+import Control.Exception (Exception (displayException))
 import Data.Bifunctor (second)
 import Data.Colour (opaque, transparent)
 import Data.Colour.Names (black, blue, grey, orange, red, white)
@@ -25,12 +25,12 @@ import Data.VectorSpace
   ( AdditiveGroup (zeroV),
     Scalar,
     VectorSpace,
-    (*^),
     (^+^),
-    (^-^),
     (^/),
   )
+import Duster.Learning (Grad (Grad), sgdUpdate)
 import Duster.Log (Logger, logString)
+import Duster.PRNG (normals, uniforms)
 import GHC.Generics (Generic)
 import qualified Graphics.Rendering.Chart as C
 import Graphics.Rendering.Chart.Backend.Cairo
@@ -42,9 +42,7 @@ import Graphics.Rendering.Chart.Easy (def)
 import Lens.Micro ((%~), (.~), (?~))
 import Path (Abs, Dir, File, Path, Rel, (</>))
 import qualified Path
-import Statistics.Distribution (ContDistr, quantile)
-import Statistics.Distribution.Normal (NormalDistribution, normalDistr)
-import System.Random (Random, RandomGen, mkStdGen, randoms, split)
+import System.Random (RandomGen, mkStdGen, split)
 import Text.Printf (printf)
 
 -- | 2D Point.
@@ -73,25 +71,7 @@ data Line = Line
 linear :: Line -> Float -> Float
 linear (Line c m) x = m * x + c
 
----- SGD ----------------------------------------------------------------------
-
--- | Mark a type as being a gradient.
-newtype Grad t = Grad t deriving (Generic, AdditiveGroup, VectorSpace)
-
--- | Perform a gradient descent update of a value.
---
--- This is a single step of SGD learning.
-sgdUpdate ::
-  (VectorSpace t) =>
-  -- | Learning rate.
-  Scalar t ->
-  -- | Initial value.
-  t ->
-  -- | Gradient of the value.
-  Grad t ->
-  -- | New value, after gradient descent update.
-  t
-sgdUpdate r theta (Grad dtheta) = theta ^-^ (r *^ dtheta)
+---- Training -----------------------------------------------------------------
 
 -- | Example for supervised training.
 --
@@ -602,47 +582,3 @@ linFitPts gen line x_range stdev =
       xs = uniforms gen_x x_range
       ys = zipWith (+) (map (linear line) xs) (normals gen_y (0.0, stdev))
    in zipWith Pt xs ys
-
----- PRNG sequence generation -------------------------------------------------
-
--- | Generate an infinite list of uniformly-distributed PRNG values.
-uniforms ::
-  forall a g.
-  (Ord a, Num a, Random a, RandomGen g) =>
-  -- | Random generator.
-  g ->
-  -- | '(min, max)' of the uniform distribution.
-  (a, a) ->
-  -- | Infinite list of generated values.
-  [a]
-uniforms gen (range_min, range_max) = assert (range_min <= range_max) vals
-  where
-    vals :: [a]
-    vals = map xform (randoms gen)
-
-    xform :: a -> a
-    xform x = x * (range_max - range_min) + range_min
-
--- | Generate an infinite list of Normally-distributed PRNG values.
---
--- Under the hood, this generates a sequence of 'Double' values, but converts
--- them to type 'a'.
-normals ::
-  forall a g.
-  (RealFrac a, Random a, RandomGen g) =>
-  -- | Random generator.
-  g ->
-  -- | '(mean, stdev)' of the Normal distribution.
-  (a, a) ->
-  -- | Infinite list of generated values.
-  [a]
-normals gen (mu, stdev) =
-  if stdev > 0
-    then map (quantile_rf normal_dist) (randoms gen)
-    else repeat 0
-  where
-    normal_dist :: NormalDistribution
-    normal_dist = normalDistr (realToFrac mu) (realToFrac stdev)
-
-    quantile_rf :: (ContDistr d) => d -> a -> a
-    quantile_rf dist x = realToFrac (quantile dist (realToFrac x))
