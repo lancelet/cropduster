@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Duster.ODE
+module Duster.ODEInt
   ( -- * Types
     Grad (Grad, unGrad),
 

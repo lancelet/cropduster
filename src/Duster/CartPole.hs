@@ -22,7 +22,7 @@ import qualified Duster.Learning as L
 import Duster.LinearFit (relFileNum)
 import Duster.Log (Logger, logString)
 import Duster.Loss (listMean)
-import Duster.ODE (Grad (Grad), odeIntRK4, termt)
+import Duster.ODEInt (Grad (Grad), odeIntRK4, termt)
 import Duster.Ops (tuple4ToVec, vecToScalar)
 import Duster.Orphans ()
 import Duster.PRNG (initLinearWeight)

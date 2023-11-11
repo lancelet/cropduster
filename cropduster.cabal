@@ -23,7 +23,7 @@ library
     Duster.Loss
     Duster.Learning
     Duster.MassSpringDamper
-    Duster.ODE
+    Duster.ODEInt
     Duster.Ops
     Duster.Orphans
     Duster.PRNG
